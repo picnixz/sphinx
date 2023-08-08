@@ -40,6 +40,9 @@ Features added
 Bugs fixed
 ----------
 
+* #11552: autosummary: ``NewType`` and ``TypeVar`` objects are now documented
+  as classes and must be referred to via :rst:dir:`py:class`.
+  Patch by Bénédikt Tran.
 * #11077: graphviz: Fix relative links from within the graph.
   Patch by Ralf Grubenmann.
 * #11529: Line Block in LaTeX builder outputs spurious empty token.

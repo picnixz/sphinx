@@ -24,7 +24,7 @@ import pydoc
 import re
 import sys
 from os import path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
 from jinja2 import TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
@@ -278,8 +278,14 @@ def generate_autosummary_content(name: str, obj: Any, parent: Any,
             _get_members(doc, app, obj, {'class'}, imported=imported_members)
         ns['exceptions'], ns['all_exceptions'] = \
             _get_members(doc, app, obj, {'exception'}, imported=imported_members)
+
+        # NewType and TypeVar objects are documented as classes by autodoc but
+        # are discovered as attributes by `get_module_attrs`, so we remove the
+        # duplicated entries in ns['attributes'] and ns['all_attributes'].
+        ns_possible_attributes = set(ns['members']).difference(ns['all_classes'])
         ns['attributes'], ns['all_attributes'] = \
-            _get_module_attrs(name, ns['members'])
+            _get_module_attrs(name, ns_possible_attributes)
+
         ispackage = hasattr(obj, '__path__')
         if ispackage and recursive:
             # Use members that are not modules as skip list, because it would then mean

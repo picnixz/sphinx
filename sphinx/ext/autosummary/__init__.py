@@ -56,7 +56,7 @@ import sys
 from inspect import Parameter
 from os import path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from docutils import nodes
 from docutils.nodes import Node, system_message
@@ -86,7 +86,7 @@ from sphinx.util.docutils import (
     new_document,
     switch_source_input,
 )
-from sphinx.util.inspect import getmro, signature_from_str
+from sphinx.util.inspect import getmro, isNewType, signature_from_str
 from sphinx.util.matching import Matcher
 from sphinx.util.typing import OptionSpec
 from sphinx.writers.html import HTML5Translator
@@ -174,11 +174,15 @@ def get_documenter(app: Sphinx, obj: Any, parent: Any) -> type[Documenter]:
     another Python object (e.g. a module or a class) to which *obj*
     belongs to.
     """
-    from sphinx.ext.autodoc import DataDocumenter, ModuleDocumenter
+    from sphinx.ext.autodoc import ClassDocumenter, DataDocumenter, ModuleDocumenter
 
     if inspect.ismodule(obj):
         # ModuleDocumenter.can_document_member always returns False
         return ModuleDocumenter
+
+    if isNewType(obj) or isinstance(obj, TypeVar):
+        # NewType and TypeVar should be documented using ClassDocumenter
+        return ClassDocumenter
 
     # Construct a fake documenter for *parent*
     if parent is not None:
