@@ -1,14 +1,40 @@
-Release 7.2.0 (in development)
-==============================
+Release 7.2.2 (released Aug 17, 2023)
+=====================================
+
+Bugs fixed
+----------
+
+* Fix the signature of the ``StateMachine.insert_input()`` patch,
+  for when calling with keyword arguments.
+* Fixed membership testing (``in``) for the :py:class:`str` interface
+  of the asset classes (``_CascadingStyleSheet`` and ``_JavaScript``),
+  which several extensions relied upon.
+* Fixed a type error in ``SingleFileHTMLBuilder._get_local_toctree``,
+  ``includehidden`` may be passed as a string or a boolean.
+* Fix ``:noindex:`` for ``PyModule`` and JSModule``.
+
+Release 7.2.1 (released Aug 17, 2023)
+=====================================
+
+Bugs fixed
+----------
+
+* Restored the the :py:class:`str` interface of the asset classes
+  (``_CascadingStyleSheet`` and ``_JavaScript``), which several extensions relied upon.
+  This will be removed in Sphinx 9.
+* Restored calls to ``Builder.add_{css,js}_file()``,
+  which several extensions relied upon.
+* Restored the private API ``TocTree.get_toctree_ancestors()``,
+  which several extensions relied upon.
+
+Release 7.2.0 (released Aug 17, 2023)
+=====================================
 
 Dependencies
 ------------
 
 * #11511: Drop Python 3.8 support.
 * #11576: Require Pygments 2.14 or later.
-
-Incompatible changes
---------------------
 
 Deprecated
 ----------
@@ -27,6 +53,8 @@ Deprecated
   ``sphinx.builders.html.StandaloneHTMLBuilder.script_files``.
   Use ``sphinx.application.Sphinx.add_css_file()``
   and ``sphinx.application.Sphinx.add_js_file()`` instead.
+* #11459: Deprecate ``sphinx.ext.autodoc.preserve_defaults.get_function_def()``.
+  Patch by Bénédikt Tran.
 
 Features added
 --------------
@@ -45,6 +73,7 @@ Features added
   Patch by Rouslan Korneychuk.
 * #10938: doctest: Add :confval:`doctest_show_successes` option.
   Patch by Trey Hunner.
+* #11533: Add ``:no-index:``, ``:no-index-entry:``, and ``:no-contents-entry:``.
 * #11572: Improve ``debug`` logging of reasons why files are detected as out of
   date.
   Patch by Eric Larson.
@@ -57,6 +86,7 @@ Features added
   text elements nodes. See :doc:`the documentation </extdev/nodes>` for more
   details.
   Patch by Bénédikt Tran.
+* Allow running Sphinx with ``python -m sphinx build ...``.
 
 Bugs fixed
 ----------
@@ -89,6 +119,12 @@ Bugs fixed
   Patch by Bénédikt Tran.
 * #11591: Fix support for C coverage in ``sphinx.ext.coverage`` extension.
   Patch by Stephen Finucane.
+* #11594: HTML Theme: Enhancements to horizontal scrolling on smaller
+  devices in the ``agogo`` theme.
+  Patch by Lukas Engelter.
+* #11459: Fix support for async and lambda functions in
+  ``sphinx.ext.autodoc.preserve_defaults``.
+  Patch by Bénédikt Tran.
 
 Testing
 -------
