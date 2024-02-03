@@ -21,7 +21,7 @@ import sphinx
 from sphinx.errors import SphinxError
 from sphinx.locale import _, __
 from sphinx.util import logging
-from sphinx.util.docutils import SphinxDirective, SphinxTranslator
+from sphinx.util.docutils import SphinxDirective
 from sphinx.util.i18n import search_image_for_language
 from sphinx.util.nodes import set_source_info
 from sphinx.util.osutil import ensuredir
@@ -47,6 +47,7 @@ class GraphvizError(SphinxError):
 
 class ClickableMapDefinition:
     """A manipulator for clickable map file of graphviz."""
+
     maptag_re = re.compile('<map id="(.*?)"')
     href_re = re.compile('href=".*?"')
 
@@ -81,7 +82,7 @@ class ClickableMapDefinition:
         If not exists, this only returns empty string.
         """
         if self.clickable:
-            return '\n'.join([self.content[0]] + self.clickable + [self.content[-1]])
+            return '\n'.join((self.content[0], *self.clickable, self.content[-1]))
         else:
             return ''
 
@@ -111,6 +112,7 @@ class Graphviz(SphinxDirective):
     """
     Directive to insert arbitrary dot markup.
     """
+
     has_content = True
     required_arguments = 0
     optional_arguments = 1
@@ -179,6 +181,7 @@ class GraphvizSimple(SphinxDirective):
     """
     Directive to insert arbitrary dot markup.
     """
+
     has_content = True
     required_arguments = 1
     optional_arguments = 0
@@ -218,7 +221,8 @@ class GraphvizSimple(SphinxDirective):
             return [figure]
 
 
-def fix_svg_relative_paths(self: SphinxTranslator, filepath: str) -> None:
+def fix_svg_relative_paths(self: HTML5Translator | LaTeXTranslator | TexinfoTranslator,
+                           filepath: str) -> None:
     """Change relative links in generated svg files to be relative to imgpath."""
     tree = ET.parse(filepath)  # NoQA: S314
     root = tree.getroot()
@@ -230,16 +234,20 @@ def fix_svg_relative_paths(self: SphinxTranslator, filepath: str) -> None:
         root.findall('.//svg:image[@xlink:href]', ns),
         root.findall('.//svg:a[@xlink:href]', ns),
     ):
-        scheme, hostname, url, query, fragment = urlsplit(element.attrib[href_name])
+        scheme, hostname, rel_uri, query, fragment = urlsplit(element.attrib[href_name])
         if hostname:
             # not a relative link
             continue
 
-        old_path = path.join(self.builder.outdir, url)
-        new_path = path.relpath(
-            old_path,
-            start=path.join(self.builder.outdir, self.builder.imgpath),
-        )
+        docname = self.builder.env.path2doc(self.document["source"])
+        if docname is None:
+            # This shouldn't happen!
+            continue
+        doc_dir = self.builder.app.outdir.joinpath(docname).resolve().parent
+
+        old_path = doc_dir / rel_uri
+        img_path = doc_dir / self.builder.imgpath
+        new_path = path.relpath(old_path, start=img_path)
         modified_url = urlunsplit((scheme, hostname, new_path, query, fragment))
 
         element.set(href_name, modified_url)
@@ -249,7 +257,8 @@ def fix_svg_relative_paths(self: SphinxTranslator, filepath: str) -> None:
         tree.write(filepath)
 
 
-def render_dot(self: SphinxTranslator, code: str, options: dict, format: str,
+def render_dot(self: HTML5Translator | LaTeXTranslator | TexinfoTranslator,
+               code: str, options: dict, format: str,
                prefix: str = 'graphviz', filename: str | None = None,
                ) -> tuple[str | None, str | None]:
     """Render graphviz code into a PNG or PDF output file."""
@@ -294,8 +303,8 @@ def render_dot(self: SphinxTranslator, code: str, options: dict, format: str,
         logger.warning(__('dot command %r cannot be run (needed for graphviz '
                           'output), check the graphviz_dot setting'), graphviz_dot)
         if not hasattr(self.builder, '_graphviz_warned_dot'):
-            self.builder._graphviz_warned_dot = {}  # type: ignore[attr-defined]
-        self.builder._graphviz_warned_dot[graphviz_dot] = True  # type: ignore[attr-defined]
+            self.builder._graphviz_warned_dot = {}  # type: ignore[union-attr]
+        self.builder._graphviz_warned_dot[graphviz_dot] = True
         return None, None
     except CalledProcessError as exc:
         raise GraphvizError(__('dot exited with error:\n[stderr]\n%r\n'

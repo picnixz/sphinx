@@ -98,6 +98,7 @@ class DefaultSubstitutions(SphinxTransform):
     """
     Replace some substitutions if they aren't defined in the document.
     """
+
     # run before the default Substitutions
     default_priority = 210
 
@@ -139,16 +140,21 @@ class MoveModuleTargets(SphinxTransform):
 
     XXX Python specific
     """
+
     default_priority = 210
 
     def apply(self, **kwargs: Any) -> None:
         for node in list(self.document.findall(nodes.target)):
             if not node['ids']:
                 continue
-            if ('ismod' in node and
-                    node.parent.__class__ is nodes.section and
-                    # index 0 is the section title node
-                    node.parent.index(node) == 1):
+            if (
+                'ismod' in node
+                and type(node.parent) is nodes.section
+                # index 0: section title node
+                # index 1: index node
+                # index 2: target node
+                and node.parent.index(node) == 2
+            ):
                 node.parent['ids'][0:0] = node['ids']
                 node.parent.remove(node)
 
@@ -157,6 +163,7 @@ class HandleCodeBlocks(SphinxTransform):
     """
     Several code block related transformations.
     """
+
     default_priority = 210
 
     def apply(self, **kwargs: Any) -> None:
@@ -181,6 +188,7 @@ class AutoNumbering(SphinxTransform):
     """
     Register IDs of tables, figures and literal_blocks to assign numbers.
     """
+
     default_priority = 210
 
     def apply(self, **kwargs: Any) -> None:
@@ -197,6 +205,7 @@ class SortIds(SphinxTransform):
     """
     Sort section IDs so that the "id[0-9]+" one comes last.
     """
+
     default_priority = 261
 
     def apply(self, **kwargs: Any) -> None:
@@ -218,6 +227,7 @@ class ApplySourceWorkaround(SphinxTransform):
     """
     Update source and rawsource attributes
     """
+
     default_priority = 10
 
     def apply(self, **kwargs: Any) -> None:
@@ -230,6 +240,7 @@ class AutoIndexUpgrader(SphinxTransform):
     """
     Detect old style (4 column based indices) and automatically upgrade to new style.
     """
+
     default_priority = 210
 
     def apply(self, **kwargs: Any) -> None:
@@ -247,6 +258,7 @@ class ExtraTranslatableNodes(SphinxTransform):
     """
     Make nodes translatable
     """
+
     default_priority = 10
 
     def apply(self, **kwargs: Any) -> None:
@@ -266,6 +278,7 @@ class UnreferencedFootnotesDetector(SphinxTransform):
     """
     Detect unreferenced footnotes and emit warnings
     """
+
     default_priority = 200
 
     def apply(self, **kwargs: Any) -> None:
@@ -287,6 +300,7 @@ class UnreferencedFootnotesDetector(SphinxTransform):
 
 class DoctestTransform(SphinxTransform):
     """Set "doctest" style to each doctest_block node"""
+
     default_priority = 500
 
     def apply(self, **kwargs: Any) -> None:
@@ -296,6 +310,7 @@ class DoctestTransform(SphinxTransform):
 
 class FilterSystemMessages(SphinxTransform):
     """Filter system messages from a doctree."""
+
     default_priority = 999
 
     def apply(self, **kwargs: Any) -> None:
@@ -311,6 +326,7 @@ class SphinxContentsFilter(ContentsFilter):
     Used with BuildEnvironment.add_toc_from() to discard cross-file links
     within table-of-contents link nodes.
     """
+
     visit_pending_xref = ContentsFilter.ignore_node_but_process_children
 
     def visit_image(self, node: nodes.image) -> None:
@@ -323,6 +339,7 @@ class SphinxSmartQuotes(SmartQuotes, SphinxTransform):
 
     refs: sphinx.parsers.RSTParser
     """
+
     default_priority = 750
 
     def apply(self, **kwargs: Any) -> None:
@@ -373,32 +390,16 @@ class SphinxSmartQuotes(SmartQuotes, SphinxTransform):
 
 class DoctreeReadEvent(SphinxTransform):
     """Emit :event:`doctree-read` event."""
+
     default_priority = 880
 
     def apply(self, **kwargs: Any) -> None:
         self.app.emit('doctree-read', self.document)
 
 
-class ManpageLink(SphinxTransform):
-    """Find manpage section numbers and names"""
-    default_priority = 999
-
-    def apply(self, **kwargs: Any) -> None:
-        for node in self.document.findall(addnodes.manpage):
-            manpage = ' '.join([str(x) for x in node.children
-                                if isinstance(x, nodes.Text)])
-            pattern = r'^(?P<path>(?P<page>.+)[\(\.](?P<section>[1-9]\w*)?\)?)$'
-            info = {'path': manpage,
-                    'page': manpage,
-                    'section': ''}
-            r = re.match(pattern, manpage)
-            if r:
-                info = r.groupdict()
-            node.attributes.update(info)
-
-
 class GlossarySorter(SphinxTransform):
     """Sort glossaries that have the ``sorted`` flag."""
+
     # This must be done after i18n, therefore not right
     # away in the glossary directive.
     default_priority = 500
@@ -501,7 +502,6 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_transform(UnreferencedFootnotesDetector)
     app.add_transform(SphinxSmartQuotes)
     app.add_transform(DoctreeReadEvent)
-    app.add_transform(ManpageLink)
     app.add_transform(GlossarySorter)
     app.add_transform(ReorderConsecutiveTargetAndIndexNodes)
 
