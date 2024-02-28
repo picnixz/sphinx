@@ -14,9 +14,9 @@ import pytest
 from sphinx.testing.util import SphinxTestApp, SphinxTestAppWrapperForSkipBuilding
 
 if TYPE_CHECKING:
-    from typing import Any, Callable
     from collections.abc import Generator
     from pathlib import Path
+    from typing import Any, Callable
 
 DEFAULT_ENABLED_MARKERS = [
     (
