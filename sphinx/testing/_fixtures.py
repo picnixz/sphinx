@@ -15,7 +15,7 @@ import threading
 import uuid
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NamedTuple, NoReturn, TypedDict, cast
+from typing import TYPE_CHECKING, NamedTuple, TypedDict, cast
 
 import pytest
 
@@ -30,6 +30,7 @@ from sphinx.testing.pytest_util import (
 from sphinx.testing.warning_types import MarkDeprecationWarning, MarkWarning
 
 if TYPE_CHECKING:
+    from typing import Literal, NoReturn
     from collections.abc import Mapping
     from io import StringIO
     from typing import Any

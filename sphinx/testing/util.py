@@ -18,7 +18,7 @@ import sys
 import warnings
 from io import StringIO
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from xml.etree import ElementTree
 
 from docutils import nodes
@@ -31,6 +31,7 @@ from sphinx.deprecation import RemovedInSphinx90Warning
 from sphinx.util.docutils import additional_nodes
 
 if TYPE_CHECKING:
+    from typing import Any
     from collections.abc import Mapping
     from pathlib import Path
 

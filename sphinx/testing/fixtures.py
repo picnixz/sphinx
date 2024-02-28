@@ -7,13 +7,14 @@ import subprocess
 import sys
 from collections import namedtuple
 from io import StringIO
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING
 
 import pytest
 
 from sphinx.testing.util import SphinxTestApp, SphinxTestAppWrapperForSkipBuilding
 
 if TYPE_CHECKING:
+    from typing import Any, Callable
     from collections.abc import Generator
     from pathlib import Path
 

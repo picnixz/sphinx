@@ -22,7 +22,7 @@ import os
 import warnings
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import TYPE_CHECKING, Literal, TypeVar, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import pytest
 from _pytest.nodes import get_fslocation_from_item
@@ -30,7 +30,8 @@ from _pytest.nodes import get_fslocation_from_item
 from sphinx.testing.warning_types import MarkWarning, NodeWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Generator, Mapping
+    from typing import Final, TypeVar
+    from collections.abc import Callable, Collection, Generator, Iterable
     from typing import Any, ClassVar
 
     from _pytest.nodes import Node as PyTestNode
@@ -108,7 +109,7 @@ class TestRootFinder:
 ScopeName = Literal["session", "package", "module", "class", "function"]
 """Pytest scopes."""
 
-_NODE_TYPE_BY_SCOPE: dict[ScopeName, type[PyTestNode]] = {
+_NODE_TYPE_BY_SCOPE: Final[dict[ScopeName, type[PyTestNode]]] = {
     'session': pytest.Session,
     'package': pytest.Package,
     'module': pytest.Module,
@@ -192,7 +193,8 @@ def find_context(  # NoQA: E302
 TestNodeLocation = tuple[str, int]
 """The location ``(fspath, lineno)`` of a pytest node.
 
-The line number is a 0-based integer.
+* The *fspath* is relative to :attr:`pytest.Config.rootpath`.
+* The line number is a 0-based integer.
 """
 
 
@@ -232,7 +234,7 @@ def get_mark_parameters(
 
         @pytest.mark.foo('ignored', 2, a='ignored', b=2)
         @pytest.mark.foo(1, a=1)
-        def test(request: pytest.FixtureRequest):
+        def test(request):
             args, kwargs = get_mark_parameters(request.node, 'foo')
             assert args == [1, 2]
             assert kwargs == {'a': 1, 'b': 2}
@@ -247,7 +249,7 @@ def get_mark_parameters(
 def check_mark_keywords(
     mark: str,
     keys: Collection[str],
-    kwargs: Mapping[str, Any],
+    kwargs: Iterable[str],
     *,
     node: PyTestNode | None = None,
     ignore_private: bool = False,
@@ -255,21 +257,27 @@ def check_mark_keywords(
     """Check the keyword arguments.
 
     :param mark: The name of the marker being checked.
-    :param keys: The marker expected keyword parameters.
+    :param keys: The marker expected keyword parameter names.
     :param kwargs: The keyword arguments to check.
     :param node: Optional node to emit warnings upon invalid arguments.
     :param ignore_private: Ignore keyword arguments with leading underscores.
-    :return: Indicate whether extra keyword arguments were given.
-    """
-    ok = True
-    for key in kwargs.keys() - keys:
-        if key.startswith('_') and ignore_private:
-            continue
+    :return: Indicate if the keyword arguments were recognized or not.
 
-        if node:
-            _pytest_warn(node, MarkWarning(f'unexpected keyword argument: {key!r}', mark))
-        ok = False
-    return ok
+    >>> check_mark_keywords('_', ['a', 'b'], {'a': 1, 'b': 2, 'c': 3})
+    False
+    >>> check_mark_keywords('_', ['a', 'b'], {'a': 1, 'b': 2, '_private': 3},
+    ...                     ignore_private=True)
+    True
+    """
+    extras = sorted(
+        key for key in set(kwargs).difference(keys)
+        if not (key.startswith('_') and ignore_private)
+    )
+    if node:
+        keylist = ', '.join(sorted(extras))
+        warning = MarkWarning(f'unexpected keyword argument(s): {keylist}', mark)
+        _pytest_warn(node, warning)
+    return len(extras) == 0
 
 
 def stack_pytest_markers(
