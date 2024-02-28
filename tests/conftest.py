@@ -37,7 +37,7 @@ def _init_console(locale_dir=sphinx.locale._LOCALE_DIR, catalog='sphinx'):
 
 sphinx.locale.init_console = _init_console
 
-pytest_plugins = ['sphinx.testing.fixtures', 'xdist']
+pytest_plugins = ['sphinx.testing.plugin', 'xdist']
 
 # Exclude resource directories for pytest test collector
 collect_ignore = ['certs', 'roots']
