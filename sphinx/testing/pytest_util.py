@@ -117,7 +117,7 @@ _NODE_TYPE_BY_SCOPE: dict[ScopeName, type[PyTestNode]] = {
 }
 
 
-# fmt:off
+# fmt: off
 @overload
 def get_node_type_by_scope(scope: Literal['session']) -> type[pytest.Session]: ...  # NoQA: E501, E704
 @overload
@@ -128,13 +128,13 @@ def get_node_type_by_scope(scope: Literal['module']) -> type[pytest.Module]: ...
 def get_node_type_by_scope(scope: Literal['class']) -> type[pytest.Class]: ...  # NoQA: E501, E704
 @overload
 def get_node_type_by_scope(scope: Literal['function']) -> type[pytest.Function]: ...  # NoQA: E501, E704
-# fmt:on
+# fmt: on
 def get_node_type_by_scope(scope: ScopeName) -> type[PyTestNode]:  # NoQA: E302
     """Get a pytest node type by its scope."""
     return _NODE_TYPE_BY_SCOPE[scope]
 
 
-# fmt:off
+# fmt: off
 @overload
 def find_context(node: PyTestNode, cond: Literal['session'], /, *, include_self: bool = ...) -> pytest.Session: ...  # NoQA: E501, E704
 @overload
@@ -161,7 +161,7 @@ def find_context(node: PyTestNode, cond: ScopeName, default: DT, /, *, include_s
 def find_context(node: PyTestNode, cond: type[NodeType], /, *, include_self: bool = ...) -> NodeType: ...  # NoQA: E501, E704
 @overload
 def find_context(node: PyTestNode, cond: type[NodeType], default: DT, /, *, include_self: bool = ...) -> NodeType | DT: ...  # NoQA: E501, E704
-# fmt:on
+# fmt: on
 def find_context(  # NoQA: E302
     node: PyTestNode,
     cond: ScopeName | type[PyTestNode],
