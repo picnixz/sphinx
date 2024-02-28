@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 from sphinx.deprecation import RemovedInSphinx90Warning
 
 if TYPE_CHECKING:
-    from typing import IO, Any, Callable
     import builtins
+    from typing import IO, Any, Callable
 
 warnings.warn("'sphinx.testing.path' is deprecated. "
               "Use 'os.path' or 'pathlib' instead.",
