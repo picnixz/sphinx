@@ -1,25 +1,29 @@
-"""Sphinx test fixtures for pytest.
-
-This module is now deprecated, use :mod:`!sphinx.testing.plugin` instead.
-"""
+"""Sphinx test fixtures for pytest."""
 
 from __future__ import annotations
 
 import shutil
 import subprocess
 import sys
+import warnings
 from collections import namedtuple
 from io import StringIO
 from typing import TYPE_CHECKING
 
 import pytest
 
+from sphinx.deprecation import RemovedInSphinx90Warning
 from sphinx.testing.util import SphinxTestApp, SphinxTestAppWrapperForSkipBuilding
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
     from typing import Any, Callable
+
+warnings.warn("'sphinx.testing.fixtures' is deprecated. "
+              "Use 'sphinx.testing.plugin' instead.",
+              RemovedInSphinx90Warning, stacklevel=2)
+
 
 DEFAULT_ENABLED_MARKERS = [
     (
