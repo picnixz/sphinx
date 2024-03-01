@@ -31,9 +31,9 @@ from sphinx.deprecation import RemovedInSphinx90Warning
 from sphinx.util.docutils import additional_nodes
 
 if TYPE_CHECKING:
-    from typing import Any
     from collections.abc import Mapping
     from pathlib import Path
+    from typing import Any
 
     from docutils.nodes import Node
 
@@ -87,7 +87,6 @@ def etree_parse(path: str) -> Any:
 
 
 def strip_escseq(text: str) -> str:
-    # TODO(picnix): enhance the regex to strip \x1b[2K as well
     return re.sub('\x1b.*?m', '', text)
 
 
@@ -113,8 +112,15 @@ class SphinxTestApp(sphinx.application.Sphinx):
     directory, whereas in the latter, the user must provide it themselves.
     """
 
+    # Allow the builder name to be passed as a keyword argument
+    # but only make it positional-only for ``pytest.mark.sphinx``
+    # so that an exception can be raised if the constructor is
+    # directly called and multiple values for the builder name
+    # are given.
+
     def __init__(
         self,
+        /,
         buildername: str = 'html',
         *,
         srcdir: Path,
