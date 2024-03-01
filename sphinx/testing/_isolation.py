@@ -19,6 +19,7 @@ class Isolation(IntEnum):
 
 
 IsolationPolicy = Union[bool, Literal["minimal", "grouped", "always"], Isolation]
+"""Allowed values for the isolation policy."""
 
 
 def parse_isolation(policy: IsolationPolicy | None) -> Isolation:
