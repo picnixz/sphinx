@@ -1,4 +1,7 @@
-"""Sphinx test fixtures for pytest"""
+"""Sphinx test fixtures for pytest.
+
+This module is now deprecated, use :mod:`!sphinx.testing.plugin` instead.
+"""
 
 from __future__ import annotations
 
@@ -45,8 +48,8 @@ class SharedResult:
         if key in self.cache:
             return
         data = {
-            'status': app_._status.getvalue(),
-            'warning': app_._warning.getvalue(),
+            'status': app_.status.getvalue(),
+            'warning': app_.warning.getvalue(),
         }
         self.cache[key] = data
 
@@ -61,8 +64,10 @@ class SharedResult:
 
 
 @pytest.fixture()
-def app_params(request: Any, test_params: dict, shared_result: SharedResult,
-               sphinx_test_tempdir: str, rootdir: str) -> _app_params:
+def app_params(
+    request: Any, test_params: dict, shared_result: SharedResult,
+    sphinx_test_tempdir: str, rootdir: str,
+) -> _app_params:
     """
     Parameters that are specified by 'pytest.mark.sphinx' for
     sphinx.application.Sphinx initialization
@@ -129,8 +134,10 @@ def test_params(request: Any) -> dict:
 
 
 @pytest.fixture()
-def app(test_params: dict, app_params: tuple[dict, dict], make_app: Callable,
-        shared_result: SharedResult) -> Generator[SphinxTestApp, None, None]:
+def app(
+    test_params: dict, app_params: tuple[dict, dict], make_app: Callable,
+    shared_result: SharedResult,
+) -> Generator[SphinxTestApp, None, None]:
     """
     Provides the 'sphinx.application.Sphinx' object
     """
@@ -154,7 +161,7 @@ def status(app: SphinxTestApp) -> StringIO:
     """
     Back-compatibility for testing with previous @with_app decorator
     """
-    return app._status
+    return app.status
 
 
 @pytest.fixture()
@@ -162,7 +169,7 @@ def warning(app: SphinxTestApp) -> StringIO:
     """
     Back-compatibility for testing with previous @with_app decorator
     """
-    return app._warning
+    return app.warning
 
 
 @pytest.fixture()
