@@ -1,10 +1,14 @@
+"""Warnings emitted by the :mod:`sphinx.testing.plugin` plugin."""
+
 from __future__ import annotations
 
 __all__ = [
     'SphinxTestingWarning',
     'NodeWarning',
     'MarkWarning',
+    'MarkDeprecationWarning',
     'FixtureWarning',
+    'FixtureDeprecationWarning',
 ]
 
 from _pytest.warning_types import PytestWarning
