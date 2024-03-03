@@ -24,6 +24,10 @@ Deprecated
   the public properties :attr:`!sphinx.testing.util.SphinxTestApp.status`
   and :attr:`!sphinx.testing.util.SphinxTestApp.warning` instead.
   Patch by Bénédikt Tran.
+* #11285: Deprecate the testing plugin ``sphinx.testing.fixtures`` in favor
+  of ``sphinx.testing.plugin``.
+  of ``isolate=True`` to avoid undesirable side-effects for parallel tests.
+  Patch by Bénédikt Tran.
 * #11285: Deprecate ``freshenv=True`` in :func:`!pytest.mark.sphinx` in favor
   of ``isolate=True`` to avoid undesirable side-effects for parallel tests.
   Patch by Bénédikt Tran.
@@ -113,8 +117,7 @@ Bugs fixed
 Testing
 -------
 
-* #11285: Add multiple fixtures in :mod:`!sphinx.testing.fixtures`,
-  utilities functions and classes to ease testing development.
+* #11285: Modernize the testing plugin in :mod:`!sphinx.testing.plugin`,
   Patch by Bénédikt Tran.
 * #11285: :func:`!pytest.mark.sphinx` accepts *warningiserror*, *keep_going*
   and *verbosity* as additional keyword arguments.
