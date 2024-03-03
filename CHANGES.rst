@@ -98,6 +98,8 @@ Bugs fixed
   Patch by James Addison.
 * #11962: Fix target resolution when using ``:paramtype:`` fields.
   Patch by Bénédikt Tran.
+* #12008: Fix case-sensitive lookup of ``std:label`` names in intersphinx inventory.
+  Patch by Michael Goerz.
 * #11285: Modernize the test suite to avoid side-effects.
   Patch by Bénédikt Tran.
 * #11285: :class:`!sphinx.testing.util.SphinxTestApp` *srcdir* argument is
