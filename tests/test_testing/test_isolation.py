@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from .util import SourceInfo, get_output, send_stmt
+from .util import SourceInfo, __dump__, integration
 
 
 def test_grouped_isolation_no_shared_result(pytester):
@@ -13,18 +13,18 @@ import pytest
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic')
 @pytest.mark.isolate('grouped')
-def test_group_{testid}(app, value):
-    {send_stmt(testid, "{app.srcdir!s}")}
+def test_group_{testid}({__dump__}, app, value):
+    {__dump__}({testid!r}, str(app.srcdir))
 '''
 
     pytester.makepyfile('\n'.join(map(gen, ('a', 'b'))))
-    output = get_output(pytester, count=4)
+    output = integration(pytester, count=4)
 
-    srcs_a = output.findall('a', dtype=SourceInfo)
+    srcs_a = output.findall('a', type=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert len(set(srcs_a)) == 1
 
-    srcs_b = output.findall('b', dtype=SourceInfo)
+    srcs_b = output.findall('b', type=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 
@@ -44,17 +44,17 @@ import pytest
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic')
 @pytest.mark.test_params(shared_result={shared_id!r})
-def test_group_{testid}(app, value):
-    {send_stmt(testid, "{app.srcdir!s}")}
+def test_group_{testid}({__dump__}, app, value):
+    {__dump__}({testid!r}, str(app.srcdir))
 '''
     pytester.makepyfile('\n'.join(map(gen, ('a', 'b'))))
-    output = get_output(pytester, count=4)
+    output = integration(pytester, count=4)
 
-    srcs_a = output.findall('a', dtype=SourceInfo)
+    srcs_a = output.findall('a', type=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert len(set(srcs_a)) == 1
 
-    srcs_b = output.findall('b', dtype=SourceInfo)
+    srcs_b = output.findall('b', type=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 
@@ -71,17 +71,17 @@ import pytest
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic', confoverrides={{"author": {testid!r}}})
 @pytest.mark.test_params(shared_result={shared_id!r})
-def test_group_{testid}(app, value):
-    {send_stmt(testid, "{app.srcdir!s}")}
+def test_group_{testid}({__dump__}, app, value):
+    {__dump__}({testid!r}, str(app.srcdir))
 '''
     pytester.makepyfile('\n'.join(map(gen, ('a', 'b'))))
-    output = get_output(pytester, count=4)
+    output = integration(pytester, count=4)
 
-    srcs_a = output.findall('a', dtype=SourceInfo)
+    srcs_a = output.findall('a', type=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert len(set(srcs_a)) == 1
 
-    srcs_b = output.findall('b', dtype=SourceInfo)
+    srcs_b = output.findall('b', type=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 
@@ -101,18 +101,18 @@ import pytest
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic')
 @pytest.mark.test_params(shared_result={shared_id!r})
-def test_group_{testid}(app, value):
-    {send_stmt(testid, "{app.srcdir!s}")}
+def test_group_{testid}({__dump__}, app, value):
+    {__dump__}({testid!r}, str(app.srcdir))
 '''
     pytester.makepyfile(test_a=gen('a'))
     pytester.makepyfile(test_b=gen('b'))
-    output = get_output(pytester, count=4)
+    output = integration(pytester, count=4)
 
-    srcs_a = output.findall('a', dtype=SourceInfo)
+    srcs_a = output.findall('a', type=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert srcs_a[0] == srcs_a[1]
 
-    srcs_b = output.findall('b', dtype=SourceInfo)
+    srcs_b = output.findall('b', type=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 

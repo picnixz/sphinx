@@ -16,7 +16,7 @@ from sphinx.ext.intersphinx import load_mappings, normalize_intersphinx_mapping
 
 
 @pytest.mark.isolate()  # because we are monkey-patching something
-@pytest.mark.sphinx(buildername="html", testroot="inheritance")
+@pytest.mark.sphinx("html", testroot="inheritance")
 @pytest.mark.usefixtures('if_graphviz_found')
 def test_inheritance_diagram(app, status, warning, monkeypatch):
     # monkey-patch InheritaceDiagram.run() so we can get access to its

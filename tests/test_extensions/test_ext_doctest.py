@@ -125,7 +125,7 @@ def record(directive, part, should_skip):
 
 
 @pytest.mark.sphinx('doctest', testroot='ext-doctest-with-autodoc')
-def test_reporting_with_autodoc(app, status, warning, capfd, monkeypatch):
+def test_reporting_with_autodoc(app, status, warning, monkeypatch):
     # Patch builder to get a copy of the output
     written = []
     with monkeypatch.context() as m:

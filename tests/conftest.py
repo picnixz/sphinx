@@ -4,6 +4,7 @@ import fnmatch
 import os
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,8 +14,9 @@ import pytest
 import sphinx
 import sphinx.locale
 import sphinx.pycode
+from sphinx.testing._warnings import FixtureWarning
+from sphinx.testing._xdist import is_pytest_xdist_enabled
 from sphinx.testing.util import _clean_up_global_state
-from sphinx.testing.warning_types import FixtureWarning
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
@@ -57,28 +59,54 @@ def pytest_report_header(config: Config) -> str:
     return header
 
 
-#: The test modules in which tests should not be executed in parallel mode,
-#: unless they are explicitly marked with ``@pytest.mark.parallel()``.
-#:
-#: The keys are paths relative to the project directory and values can
-#: be ``None`` to indicate all tests or a list of test names.
-_FORCE_SERIAL: dict[str, Sequence[str] | None] = {
+# The test modules in which tests should not be executed in parallel mode,
+# unless they are explicitly marked with ``@pytest.mark.parallel()``.
+#
+# The keys are paths relative to the project directory and values can
+# be ``None`` to indicate all tests or a list of (non-parametrized) test
+# names, e.g., for a test::
+#
+#   @pytest.mark.parametrize('value', [1, 2])
+#   def test_foo(): ...
+#
+# the name is ``test_foo`` and not ``test_foo[1]`` or ``test_foo[2]``.
+#
+# Note that a test class or function should not have '[' in its name.
+_SERIAL_TESTS: dict[str, Sequence[str] | None] = {
     'tests/test_builders/test_build_linkcheck.py': None,
     'tests/test_intl/test_intl.py': None,
     'tests/test_testing/**': None,
 }
 
 
+@lru_cache(maxsize=512)
+def _serial_matching(relfspath: str, pattern: str) -> bool:
+    return fnmatch.fnmatch(relfspath, pattern)
+
+
+def _test_basename(name: str) -> str:
+    """Get the test name without the parametrization part from an item name."""
+    return name[:name.find('[')] if '[' in name else name
+
+
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session: Session, config: Config, items: list[Item]) -> None:
+    if not is_pytest_xdist_enabled(config):
+        # when the xdist plugin is inactive, tests are executed normally
+        # whether they are marked as parallel or serial
+        return
+
+    select, ignore = [], []
     for item in items:
-        if item.get_closest_marker('parallel'):
+        if item.get_closest_marker('serial'):
+            ignore.append(item)
             continue
 
         relfspath, _, _ = item.location
 
-        for pattern, serials in _FORCE_SERIAL.items():
-            if fnmatch.fnmatch(relfspath, pattern):
-                if serials is None or item.name in serials:
+        for pattern, names in _SERIAL_TESTS.items():
+            if _serial_matching(relfspath, pattern):
+                if names is None or _test_basename(item.name) in names:
                     item.add_marker('serial')
 
 

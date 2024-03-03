@@ -1404,29 +1404,6 @@ def test_latex_raw_directive(app, status, warning):
     assert 'LaTeX: abc def ghi' in result
 
 
-@pytest.mark.sphinx('latex', testroot='images')
-def test_latex_images(app, status, warning):
-    app.build()
-
-    result = (app.outdir / 'python.tex').read_text(encoding='utf8')
-
-    # images are copied
-    assert '\\sphinxincludegraphics{{python-logo}.png}' in result
-    assert (app.outdir / 'python-logo.png').exists()
-
-    # not found images
-    assert '\\sphinxincludegraphics{{NOT_EXIST}.PNG}' not in result
-    assert ('WARNING: Could not fetch remote image: '
-            'https://www.google.com/NOT_EXIST.PNG [404]' in warning.getvalue())
-
-    # an image having target
-    assert ('\\sphinxhref{https://www.sphinx-doc.org/}'
-            '{\\sphinxincludegraphics{{rimg}.png}}\n\n' in result)
-
-    # a centerized image having target
-    assert ('\\sphinxhref{https://www.python.org/}{{\\hspace*{\\fill}'
-            '\\sphinxincludegraphics{{rimg}.png}\\hspace*{\\fill}}}\n\n' in result)
-
 
 @pytest.mark.sphinx('latex', testroot='latex-index')
 def test_latex_index(app, status, warning):
@@ -1678,16 +1655,67 @@ def test_latex_code_role(app):
             '\n' + common_content + '\n' + r'\end{sphinxVerbatim}') in content
 
 
+@pytest.mark.isolate()  # because we don't want to keep the remote content
+@pytest.mark.sphinx('latex', testroot='images')
+def test_latex_images(app, status, warning):
+    remote_png = app.outdir / 'python-logo.png'
+    assert not remote_png.exists()
+    app.build()
+
+    result = (app.outdir / 'python.tex').read_text(encoding='utf8')
+
+    # not found images
+    assert '\\sphinxincludegraphics{{NOT_EXIST}.PNG}' not in result
+    stderr = warning.getvalue()
+
+    if remote_png.exists():
+        # remote images are copied
+        assert '\\sphinxincludegraphics{{python-logo}.png}' in result
+
+        # not found remote image is warned (the host is resolved)
+        assert ('WARNING: Could not fetch remote image: '
+                'https://www.google.com/NOT_EXIST.PNG [404]' in stderr)
+    else:
+        # host is offline so remote hosts cannot be queried
+        assert '\\sphinxincludegraphics{{python-logo}.png}' not in result
+        err = "Failed to resolve %r ([Errno -2] Name or service not known)"
+        assert (err % 'www.python.org') in stderr
+        assert (err % 'www.google.com') in stderr
+
+    # an image having target
+    assert ('\\sphinxhref{https://www.sphinx-doc.org/}'
+            '{\\sphinxincludegraphics{{rimg}.png}}\n\n' in result)
+
+    # a centerized image having target
+    assert ('\\sphinxhref{https://www.python.org/}{{\\hspace*{\\fill}'
+            '\\sphinxincludegraphics{{rimg}.png}\\hspace*{\\fill}}}\n\n' in result)
+
+
+@pytest.mark.isolate()  # because we don't want to keep the copied output
 @pytest.mark.sphinx('latex', testroot='images')
 def test_copy_images(app, status, warning):
+    remote_png = app.outdir / 'python-logo.png'
+    assert not remote_png.exists()
+
     app.build()
 
     test_dir = Path(app.outdir)
+
     images = {
         image.name for image in test_dir.rglob('*')
         if image.suffix in {'.gif', '.pdf', '.png', '.svg'}
     }
-    images.discard('python-logo.png')
+
+    if remote_png.exists():
+        assert 'python-logo.png' in images
+        images.remove('python-logo.png')
+    else:
+        # host is offline
+        stderr = warning.getvalue()
+        err = "Failed to resolve %r ([Errno -2] Name or service not known)"
+        assert (err % 'www.python.org') in stderr
+        assert (err % 'www.google.com') in stderr
+
     assert images == {
         'img.pdf',
         'rimg.png',

@@ -124,6 +124,9 @@ def test_copy_images(app, status, warning):
 
     images_dir = Path(app.outdir) / 'python-figures'
     images = {image.name for image in images_dir.rglob('*')}
+
+    err = "Failed to resolve 'www.python.org' ([Errno -2] Name or service not known)"
+    assert ('python-logo.png' in images) ^ (err in warning.getvalue())
     images.discard('python-logo.png')
     assert images == {
         'img.png',

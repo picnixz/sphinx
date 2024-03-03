@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 import pytest
 from _pytest.scope import Scope
 
 from sphinx.testing.pytest_util import TestRootFinder
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 def chk_testroot_finder_with_fixtures(
