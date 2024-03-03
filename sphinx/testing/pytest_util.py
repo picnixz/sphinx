@@ -25,20 +25,19 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Literal, overload
 
 import pytest
-from _pytest.nodes import get_fslocation_from_item
+from _pytest import nodes
 
-from sphinx.testing.warning_types import MarkWarning, NodeWarning
+from sphinx.testing._warnings import MarkWarning, NodeWarning, SphinxTestingWarning
 
 if TYPE_CHECKING:
-    from typing import Final, TypeVar
     from collections.abc import Callable, Collection, Generator, Iterable
-    from typing import Any, ClassVar
+    from typing import Any, ClassVar, Final, NoReturn, TypeVar
 
-    from _pytest.nodes import Node as PyTestNode
+    from _pytest.nodes import Node as PytestNode
 
     T = TypeVar('T')
     DT = TypeVar('DT')
-    NodeType = TypeVar('NodeType', bound="PyTestNode")
+    NodeType = TypeVar('NodeType', bound="PytestNode")
 
 
 class TestRootFinder:
@@ -109,7 +108,7 @@ class TestRootFinder:
 ScopeName = Literal["session", "package", "module", "class", "function"]
 """Pytest scopes."""
 
-_NODE_TYPE_BY_SCOPE: Final[dict[ScopeName, type[PyTestNode]]] = {
+_NODE_TYPE_BY_SCOPE: Final[dict[ScopeName, type[PytestNode]]] = {
     'session': pytest.Session,
     'package': pytest.Package,
     'module': pytest.Module,
@@ -130,53 +129,59 @@ def get_node_type_by_scope(scope: Literal['class']) -> type[pytest.Class]: ...  
 @overload
 def get_node_type_by_scope(scope: Literal['function']) -> type[pytest.Function]: ...  # NoQA: E501, E704
 # fmt: on
-def get_node_type_by_scope(scope: ScopeName) -> type[PyTestNode]:  # NoQA: E302
-    """Get a pytest node type by its scope."""
+def get_node_type_by_scope(scope: ScopeName) -> type[PytestNode]:  # NoQA: E302
+    """Get a pytest node type by its scope.
+
+    :param scope: The scope name.
+    :return: The corresponding pytest node type.
+    """
     return _NODE_TYPE_BY_SCOPE[scope]
 
 
 # fmt: off
 @overload
-def find_context(node: PyTestNode, cond: Literal['session'], /, *, include_self: bool = ...) -> pytest.Session: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['session'], /, *, include_self: bool = ...) -> pytest.Session: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['package'], /, *, include_self: bool = ...) -> pytest.Package: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['package'], /, *, include_self: bool = ...) -> pytest.Package: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['module'], /, *, include_self: bool = ...) -> pytest.Module: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['module'], /, *, include_self: bool = ...) -> pytest.Module: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['class'], /, *, include_self: bool = ...) -> pytest.Class: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['class'], /, *, include_self: bool = ...) -> pytest.Class: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['function'], /, *, include_self: bool = ...) -> pytest.Function: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['function'], /, *, include_self: bool = ...) -> pytest.Function: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['session'], default: DT, /, *, include_self: bool = ...) -> pytest.Session | DT: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: ScopeName, /, *, include_self: bool = ...) -> PytestNode: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['package'], default: DT, /, *, include_self: bool = ...) -> pytest.Package | DT: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['session'], default: DT, /, *, include_self: bool = ...) -> pytest.Session | DT: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['module'], default: DT, /, *, include_self: bool = ...) -> pytest.Module | DT: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['package'], default: DT, /, *, include_self: bool = ...) -> pytest.Package | DT: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['class'], default: DT, /, *, include_self: bool = ...) -> pytest.Class | DT: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['module'], default: DT, /, *, include_self: bool = ...) -> pytest.Module | DT: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: Literal['function'], default: DT, /, *, include_self: bool = ...) -> pytest.Function | DT: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['class'], default: DT, /, *, include_self: bool = ...) -> pytest.Class | DT: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: ScopeName, default: DT, /, *, include_self: bool = ...) -> PyTestNode | DT: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: Literal['function'], default: DT, /, *, include_self: bool = ...) -> pytest.Function | DT: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: type[NodeType], /, *, include_self: bool = ...) -> NodeType: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: ScopeName, default: DT, /, *, include_self: bool = ...) -> PytestNode | DT: ...  # NoQA: E501, E704
 @overload
-def find_context(node: PyTestNode, cond: type[NodeType], default: DT, /, *, include_self: bool = ...) -> NodeType | DT: ...  # NoQA: E501, E704
+def find_context(node: PytestNode, cond: type[NodeType], /, *, include_self: bool = ...) -> NodeType: ...  # NoQA: E501, E704
+@overload
+def find_context(node: PytestNode, cond: type[NodeType], default: DT, /, *, include_self: bool = ...) -> NodeType | DT: ...  # NoQA: E501, E704
 # fmt: on
 def find_context(  # NoQA: E302
-    node: PyTestNode,
-    cond: ScopeName | type[PyTestNode],
+    node: PytestNode,
+    cond: ScopeName | type[PytestNode],
     /,
     *default: DT,
     include_self: bool = True,
-) -> PyTestNode | DT:
+) -> PytestNode | DT:
     """Get a parent node in the given scope.
 
     :param node: The node to get an ancestor of.
     :param cond: The ancestor type or scope.
     :param default: A default value.
     :param include_self: Include *node* if possible.
-    :return: A node of suitable type.
+    :return: A node in the ancestor chain (possibly *node*) of desired type.
     """
     if isinstance(cond, str):
         cond = get_node_type_by_scope(cond)
@@ -198,15 +203,15 @@ TestNodeLocation = tuple[str, int]
 """
 
 
-@lru_cache(maxsize=16)
-def get_node_location(node: PyTestNode) -> TestNodeLocation | None:
+@lru_cache(maxsize=128)
+def get_node_location(node: PytestNode) -> TestNodeLocation | None:
     """The node location ``(fspath, lineno)``, if any.
 
     If the path or the line number cannot be deduced, a warning is emitted.
 
     When deduced, the line number is a 0-based integer.
     """
-    path, lineno = get_fslocation_from_item(node)
+    path, lineno = nodes.get_fslocation_from_item(node)
     if not (path := os.fsdecode(path)) or lineno == -1 or lineno is None:
         msg = f'could not obtain node location for {node!r}'
         warnings.warn_explicit(msg, category=NodeWarning, filename=path, lineno=-1)
@@ -215,7 +220,7 @@ def get_node_location(node: PyTestNode) -> TestNodeLocation | None:
 
 
 def get_mark_parameters(
-    node: PyTestNode,
+    node: PytestNode,
     marker: str,
     /,
     *default_args: Any,
@@ -248,19 +253,21 @@ def get_mark_parameters(
 
 def check_mark_keywords(
     mark: str,
-    keys: Collection[str],
-    kwargs: Iterable[str],
+    expect: Collection[str],
+    actual: Iterable[str],
     *,
-    node: PyTestNode | None = None,
+    node: PytestNode | None = None,
     ignore_private: bool = False,
+    strict: bool = False,
 ) -> bool:
     """Check the keyword arguments.
 
     :param mark: The name of the marker being checked.
-    :param keys: The marker expected keyword parameter names.
-    :param kwargs: The keyword arguments to check.
+    :param expect: The marker expected keyword parameter names.
+    :param actual: The keyword arguments to check.
     :param node: Optional node to emit warnings upon invalid arguments.
     :param ignore_private: Ignore keyword arguments with leading underscores.
+    :param strict: If true, raises an exception instead of a warning.
     :return: Indicate if the keyword arguments were recognized or not.
 
     >>> check_mark_keywords('_', ['a', 'b'], {'a': 1, 'b': 2, 'c': 3})
@@ -270,13 +277,16 @@ def check_mark_keywords(
     True
     """
     extras = sorted(
-        key for key in set(kwargs).difference(keys)
+        key for key in set(actual).difference(expect)
         if not (key.startswith('_') and ignore_private)
     )
-    if node:
-        keylist = ', '.join(sorted(extras))
-        warning = MarkWarning(f'unexpected keyword argument(s): {keylist}', mark)
-        _pytest_warn(node, warning)
+    if extras and node:
+        msg = 'unexpected keyword argument(s): %s' % ', '.join(sorted(extras))
+        if strict:
+            _mark_fail(mark, msg)
+
+        _pytest_warn(node, MarkWarning(msg, mark))
+        return False
     return len(extras) == 0
 
 
@@ -304,13 +314,51 @@ def pytest_not_raises(*exceptions: type[BaseException]) -> Generator[None, None,
         pytest.fail(f'DID RAISE {exc.__class__}')
 
 
-def _pytest_warn(node: PyTestNode, warning: Warning) -> None:
-    """Helper for emitting a warning on a pytest node.
+# private utilities
 
-    Note that warnings can only be emitted if the node location is known.
+
+# fmt: off
+@overload
+def _pytest_warn(config: pytest.Config, warning: Warning, /) -> None: ...  # NoQA: E501, E704
+@overload
+def _pytest_warn(config: pytest.Config, fmt: Any, /, *args: Any, category: type[Warning] | None = ...) -> None: ...  # NoQA: E501, E704
+@overload
+def _pytest_warn(request: pytest.FixtureRequest, warning: Warning, /) -> None: ...  # NoQA: E501, E704
+@overload
+def _pytest_warn(request: pytest.FixtureRequest, fmt: Any, /, *args: Any, category: type[Warning] | None = ...) -> None: ...  # NoQA: E501, E704
+@overload
+def _pytest_warn(node: PytestNode, warning: Warning, /) -> None: ...  # NoQA: E501, E704
+@overload
+def _pytest_warn(node: PytestNode, fmt: Any, /, *args: Any, category: type[Warning] | None = ...) -> None: ...  # NoQA: E501, E704
+# fmt: on
+def _pytest_warn(  # NoQA: E302
+    ctx: Any, fmt: Any, /, *args: Any, category: type[Warning] | None = None,
+) -> None:
+    """Helper for emitting a warning on a pytest object.
+
+    This is typically useful for debugging when plugins capturing ``print``
+    such as ``xdist`` are active. Warnings are (apparently) always printed
+    on the console.
 
     :meta private:
     """
+    if isinstance(fmt, Warning):
+        warning = fmt
+    else:
+        message = str(fmt)
+        if args:  # allow str(fmt) to contain '%s'
+            message = message % args
+        warning = SphinxTestingWarning(message) if category is None else category(message)
+
+    if isinstance(ctx, pytest.Config):
+        ctx.issue_config_time_warning(warning, stacklevel=2)
+        return
+
+    node = ctx.node if isinstance(ctx, pytest.FixtureRequest) else ctx
+    if not isinstance(node, nodes.Node):
+        err = f'expecting a session, a fixture request or a pytest node, got {node!r}'
+        raise TypeError(err)
+
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', NodeWarning)
         location = get_node_location(node)
@@ -323,3 +371,7 @@ def _pytest_warn(node: PyTestNode, warning: Warning) -> None:
         lineno = lineno + 1
 
     warnings.warn_explicit(warning, category=None, filename=filename, lineno=lineno)
+
+
+def _mark_fail(mark: str, message: str) -> NoReturn:
+    pytest.fail(f'pytest.mark.{mark}(): {message}')
