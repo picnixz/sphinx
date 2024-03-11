@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, TypeVar, final, overload
 
 import pytest
 
+import sphinx
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from typing import Any, Final
 
     from _pytest.pytester import Pytester, RunResult
+
+SPHINX_LIBDIR_PATH: Final[str] = str(Path(sphinx.__file__).parent)
 
 # delimiters where debug content is printed
 DEBUG_MARK: Final[str] = '[sphinx-dump-channel] '
@@ -52,16 +58,24 @@ def add_debug_line(name: str, value: Any) -> str:
     return f'{DEBUG_MARK}{name}={value}'
 
 
+
+# TODO: handle pythonpaths
+def _runpytest(pytester: Pytester, /, *args: str | os.PathLike[str], **kwargs: Any) -> RunResult:
+    # use '-rA' to show the dumper's reports before intercepting them
+    os.environ['COLUMNS'] = str(shutil.get_terminal_size()[0])
+    return pytester.runpytest(*args, '-rA', **kwargs)
+
+
 def integration(pytester: Pytester, *, count: int) -> Output:
     # use '-rA' to show the dumper's reports
-    res = pytester.runpytest_inprocess('-rA')
+    res = _runpytest(pytester, plugins=['sphinx.testing.plugin'])
     res.assert_outcomes(passed=count)
     return Output(res)
 
 
 def xdist_integration(pytester: Pytester, *, count: int, jobs: int = 2) -> Output:
-    # use '-rA' to show the dumper's reports
-    res = pytester.runpytest_inprocess('-rA', '-p', 'xdist', '-n', str(jobs), '--dist=loadgroup')
+    res = _runpytest(pytester, '-n', str(jobs), '--dist=loadgroup',
+                     plugins=['sphinx.testing.plugin', 'xdist'])
     res.assert_outcomes(passed=count)
     return Output(res)
 

@@ -1,30 +1,36 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
-if TYPE_CHECKING:
-    from _pytest.pytester import Pytester
+from .util import SPHINX_LIBDIR_PATH
 
+SPHINX_PLUGIN_NAME = 'sphinx.testing.plugin'
 DUMPER_PLUGIN_NAME = 'tests.test_testing.util.dumper'
-pytest_plugins = ['pytester', 'xdist']
+pytest_plugins = [SPHINX_PLUGIN_NAME, 'pytester']
 collect_ignore = [DUMPER_PLUGIN_NAME]
 
 
 @pytest.fixture(autouse=True)
-def pytester_source(pytester: Pytester, pytestconfig: pytest.Config) -> Path:
+def pytester_conftest(pytester: pytest.Pytester) -> Path:
     testroot_dir = Path(__file__).parent.parent / 'roots'
+    pytester.makepyprojecttoml(f'''
+[pytest] 
+pythonpath = {SPHINX_LIBDIR_PATH!r}
+''')
     source = f'''
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import os
+sys.path.insert(0, {SPHINX_LIBDIR_PATH!r})
+
 import pytest
+
+import sphinx.testing.plugin
 
 import sphinx.locale
 
@@ -36,12 +42,9 @@ def _init_console(locale_dir=sphinx.locale._LOCALE_DIR, catalog='sphinx'):
 
 sphinx.locale.init_console = _init_console
 
-# ensure that the sub-terminal spawned by ``pytester``
-# inherits the width of the terminal running ``pytest``
-os.environ['COLUMNS'] = '{shutil.get_terminal_size()[0]}'
 
 # 'xdist' will be added on demand when invoking pytester
-pytest_plugins = ['sphinx.testing.plugin', {DUMPER_PLUGIN_NAME!r}]
+pytest_plugins = [{DUMPER_PLUGIN_NAME!r}]
 collect_ignore = [{DUMPER_PLUGIN_NAME!r}]
 
 @pytest.fixture(scope='session')

@@ -1,23 +1,39 @@
 from __future__ import annotations
 
+import dataclasses
+import itertools
 import os
 import shutil
 import subprocess
 import sys
 from io import StringIO
-from typing import TYPE_CHECKING, TypedDict
+from typing import (
+    TYPE_CHECKING,
+    Optional,
+    TypedDict,
+    cast,
+)
 
 import pytest
 
-from sphinx.testing._fixtures import AppParams, get_app_params, get_test_params
+from sphinx.testing._fixtures import (
+    AppParams,
+    node_location_id,
+    process_isolate,
+    process_sphinx,
+    process_test_params,
+)
 from sphinx.testing._isolation import Isolation
+from sphinx.testing._xdist import is_pytest_xdist_enabled, set_pytest_xdist_group
 from sphinx.testing.pytest_util import TestRootFinder, find_context
 from sphinx.testing.util import SphinxTestApp, SphinxTestAppLazyBuild
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
     from pathlib import Path
-    from typing import Any
+    from typing import (
+        Any,
+    )
 
     from sphinx.testing._fixtures import TestParams
     from sphinx.testing._isolation import IsolationPolicy
@@ -25,15 +41,16 @@ if TYPE_CHECKING:
 DEFAULT_ENABLED_MARKERS = [
     (
         'sphinx('
-        'buildername="html", *, '
-        'srcdir=None, testroot="root", confoverrides=None, '
-        'freshenv=False, warningiserror=False, tags=None, '
+        'buildername="html", /, *, '
+        'testroot="root", confoverrides=None, '
+        'warningiserror=False, tags=None, '
         'verbosity=0, parallel=0, keep_going=False, '
-        'builddir=None, docutils_conf=None, '
-        'isolate=False): arguments to initialize the sphinx test application.'
+        'docutils_conf=None, isolate=False'
+        '): arguments to initialize the sphinx test application.'
     ),
-    'test_params(shared_result=None): test configuration.',
+    'test_params(*, shared_result=None): test configuration.',
     'isolate(policy=None, /): test isolation policy.',
+    'sphinx_no_default_xdist(): disable the default xdist-group on tests',
 ]
 
 
@@ -41,6 +58,70 @@ def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers."""
     for marker in DEFAULT_ENABLED_MARKERS:
         config.addinivalue_line('markers', marker)
+
+
+def pytest_addhooks(pluginmanager: pytest.PytestPluginManager) -> None:
+    if pluginmanager.hasplugin('xdist'):
+        from sphinx.testing import _xdist_hooks
+
+        pluginmanager.register(_xdist_hooks)
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(
+    session: pytest.Session,
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    if not is_pytest_xdist_enabled(config):
+        return
+
+    # *** IMPORTANT ***
+    #
+    # This hook is executed by every xdist worker and the items
+    # are NOT shared across those workers. In particular, it is
+    # crucial that the xdist-group that we define later is the
+    # same across ALL workers. In other words, the group can
+    # only depend on xdist-agnostic data such as the physical
+    # location of a test item.
+    #
+    # In addition, custom plugins that can change the meaning
+    # of ``@pytest.mark.parametrize`` or that behave similarly
+    # might break our construction, so use them carefully!
+
+    for item in items:
+        if (
+            item.get_closest_marker('parametrize')
+            and item.get_closest_marker('sphinx_no_default_xdist') is None
+        ):
+            fspath, lineno, _ = item.location  # this is xdist-agnostic
+            xdist_group = node_location_id((fspath, lineno or -1))
+            set_pytest_xdist_group(item, xdist_group)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item: pytest.Item) -> Generator[None, None, None]:
+    # teardown of fixtures
+    yield
+    # now the fixtures have executed their teardowns
+    if APP_INFO_KEY in item.stash:
+        info: _AppInfo = item.stash[APP_INFO_KEY]
+        del item.stash[APP_INFO_KEY]
+
+        text = info.render()
+
+        if (
+            # do not deduplicate the report info when using -rA
+            'A' not in item.config.option.reportchars
+            and (item.config.option.capture == 'no' or item.config.get_verbosity() >= 2)
+            # see: https://pytest-xdist.readthedocs.io/en/stable/known-limitations.html
+            and not is_pytest_xdist_enabled(item.config)
+        ):
+            # use carriage returns to avoid being printed inside the progression bar
+            # and additionally show the node ID for visual purposes
+            print('\n\n', f'[{item.nodeid}]', '\n', text, sep='', end='')  # NoQA: T201
+
+        item.add_report_section(f'teardown [{item.nodeid}]', 'fixture %r' % 'app', text)
 
 
 @pytest.fixture(scope='session')
@@ -177,26 +258,25 @@ def app_params(
 
     See :class:`sphinx.testing.util.SphinxTestApp` for the allowed parameters.
     """
-    if m := request.node.get_closest_marker('isolate'):
-        # isolate() is equivalent to isolate('always')
-        sphinx_isolation = m.args[0] if m.args else True
-
+    default_isolation = process_isolate(request.node, sphinx_isolation)
     shared_result_id = test_params['shared_result']
-    args, kwargs = get_app_params(
+    args, kwargs = process_sphinx(
         request.node,
         session_temp_dir=sphinx_test_tempdir,
         testroot_finder=testroot_finder,
         default_builder=sphinx_builder,
-        default_isolation=sphinx_isolation,
+        default_isolation=default_isolation,
         shared_result=shared_result_id,
     )
     assert shared_result_id == kwargs['shared_result']
     # restore the I/O stream values
     if shared_result_id and (frame := module_cache.restore(shared_result_id)):
         if kwargs.setdefault('status', frame['status']) is not frame['status']:
-            pytest.fail('cannot use "shared_result" when "status" is explicitly given')
+            fmt = 'cannot use %r when %r is explicitly given'
+            pytest.fail(fmt % ('shared_result', 'status'))
         if kwargs.setdefault('warning', frame['warning']) is not frame['warning']:
-            pytest.fail('cannot use "shared_result" when "warning" is explicitly given')
+            fmt = 'cannot use %r when %r is explicitly given'
+            pytest.fail(fmt % ('shared_result', 'warning'))
 
     # copy the testroot files to the test sources directory
     _init_sources(kwargs['testroot_path'], kwargs['srcdir'], kwargs['isolate'])
@@ -206,37 +286,119 @@ def app_params(
 @pytest.fixture()
 def test_params(request: pytest.FixtureRequest) -> TestParams:
     """Test parameters that are specified by ``pytest.mark.test_params``."""
-    return get_test_params(request.node)
+    return process_test_params(request.node)
+
+
+@dataclasses.dataclass
+class _AppInfo:
+    """Report to render at the end of a test using the :func:`app` fixture."""
+
+    builder: str
+    """The builder name."""
+
+    testroot_path: str | None
+    """The absolute path to the sources directory (if any)."""
+    shared_result: str | None
+    """The user-defined shared result (if any)."""
+
+    srcdir: str
+    """The absolute path to the application's sources directory."""
+    outdir: str
+    """The absolute path to the application's output directory."""
+
+    # the fields below will be updated when in the teardown phase
+    # of ``app`` or when requesting ``app_extra_info``
+
+    messages: str = dataclasses.field(default='', init=False)
+    """The application's status messages."""
+    warnings: str = dataclasses.field(default='', init=False)
+    """The application's warnings messages."""
+    extras: dict[str, Any] = dataclasses.field(default_factory=dict, init=False)
+    """Extra information injected by additional fixtures upon teardown."""
+
+    def render(self) -> str:
+        """Format the report as a string to print or render."""
+        config = [('builder', self.builder)]
+        if self.testroot_path:
+            config.append(('testroot path', self.testroot_path))
+        config.extend([('srcdir', self.srcdir), ('outdir', self.outdir)])
+        config.extend((name, repr(value)) for name, value in self.extras.items())
+
+        tw, _ = shutil.get_terminal_size()
+        kw = 8 + max(len(name) for name, _ in config)
+
+        lines = itertools.chain(
+            [f'{" configuration ":-^{tw}}'],
+            (f'{name:{kw}s} {strvalue}' for name, strvalue in config),
+            [f'{" messages ":-^{tw}}', text] if (text := self.messages) else (),
+            [f'{" warnings ":-^{tw}}', text] if (text := self.warnings) else (),
+            ['=' * tw],
+        )
+        return '\n'.join(lines)
+
+
+APP_INFO_KEY: pytest.StashKey[_AppInfo] = pytest.StashKey()
+
+def _get_app_info(
+    request: pytest.FixtureRequest,
+    app: SphinxTestApp,
+    app_params: AppParams
+) -> _AppInfo:
+    if APP_INFO_KEY in request.node.stash:
+        info = request.node.stash[APP_INFO_KEY]
+    else:
+        shared_result = app_params.kwargs['shared_result']
+        testroot_path = app_params.kwargs['testroot_path']
+        cast(pytest.Stash, request.node.stash)[APP_INFO_KEY] = info = _AppInfo(
+            builder=app.builder.name,
+            testroot_path=testroot_path, shared_result=shared_result,
+            srcdir=os.fsdecode(app.srcdir), outdir=os.fsdecode(app.outdir),
+        )
+    return info
+
+
+@pytest.fixture()
+def app_extra_info(
+    request: pytest.FixtureRequest,
+    # fixture is not used but is needed to make this fixture dependent of ``app``
+    app: SphinxTestApp,
+    # fixture is already a dependency of ``app``
+    app_params: AppParams,
+) -> Generator[dict[str, Any], None, None]:
+    yield _get_app_info(request, app, app_params).extras
 
 
 @pytest.fixture()
 def app(
+    request: pytest.FixtureRequest,
     app_params: AppParams,
     make_app: Callable[..., SphinxTestApp],
     module_cache: ModuleCache,
 ) -> Generator[SphinxTestApp, None, None]:
     """A :class:`sphinx.application.Sphinx` object suitable for testing."""
     # the 'app_params' fixture already depends on the 'test_result' fixture
-    shared_result_id = app_params.kwargs['shared_result']
+    shared_result = app_params.kwargs['shared_result']
     app = make_app(*app_params.args, **app_params.kwargs)
     yield app
 
-    if shared_result_id is not None:
-        pass
+    info = _get_app_info(request, app, app_params)
+    # update the messages accordingly
+    info.messages = app.status.getvalue()
+    info.warnings = app.warning.getvalue()
 
-    if shared_result_id is not None:
-        module_cache.store(shared_result_id, app)
+    if shared_result is not None:
+        module_cache.store(shared_result, app)
 
 
 @pytest.fixture()
 def status(app: SphinxTestApp) -> StringIO:
-    """Fixture for the :func:`~sphinx.testing.fixtures.app` status stream."""
+    """Fixture for the :func:`~sphinx.testing.plugin.app` status stream."""
     return app.status
 
 
 @pytest.fixture()
 def warning(app: SphinxTestApp) -> StringIO:
-    """Fixture for the :func:`~sphinx.testing.fixtures.app` warning stream."""
+    """Fixture for the :func:`~sphinx.testing.plugin.app` warning stream."""
     return app.warning
 
 
@@ -244,10 +406,10 @@ def warning(app: SphinxTestApp) -> StringIO:
 def make_app(test_params: TestParams) -> Generator[Callable[..., SphinxTestApp], None, None]:
     """Fixture to create :class:`~sphinx.testing.util.SphinxTestApp` objects."""
     stack: list[SphinxTestApp] = []
-    not_shared = test_params['shared_result'] is None
+    allow_rebuild = test_params['shared_result'] is None
 
     def make(*args: Any, **kwargs: Any) -> SphinxTestApp:
-        if not_shared:
+        if allow_rebuild:
             app = SphinxTestApp(*args, **kwargs)
         else:
             app = SphinxTestAppLazyBuild(*args, **kwargs)
@@ -305,6 +467,33 @@ def if_graphviz_found(app: SphinxTestApp) -> None:  # NoQA: PT004
     pytest.skip('graphviz "dot" is not available')
 
 
+HOST_DNS_LOOKUP_ERROR = pytest.StashKey[Optional[str]]()
+
+
+def _get_host_dns_lookup_error() -> str | None:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        # query a DNS server to check for internet connection
+        try:
+            sock.settimeout(5)
+            sock.connect(('1.1.1.1', 80))
+        except OSError as exc:
+            # other type of errors are propagated
+            return str(exc)
+        return None
+
+
+@pytest.fixture(scope='session')
+def if_online(request: pytest.FixtureRequest) -> None:  # NoQA: PT004
+    """Skip the test if the host has no connection."""
+    if HOST_DNS_LOOKUP_ERROR not in request.session.stash:
+        # do not use setdefault() to avoid creating a socket connection
+        request.session.stash[HOST_DNS_LOOKUP_ERROR] = _get_host_dns_lookup_error()
+    if (error := request.session.stash[HOST_DNS_LOOKUP_ERROR]) is not None:
+        pytest.skip('host appears to be offline (%s)' % error)
+
+
 @pytest.fixture()
 def rollback_sysmodules() -> Generator[None, None, None]:  # NoQA: PT004
     """
@@ -314,11 +503,9 @@ def rollback_sysmodules() -> Generator[None, None, None]:  # NoQA: PT004
     For example, used in test_ext_autosummary.py to permit unloading the
     target module to clear its cache.
     """
-    # test setup
     sys_module_names = frozenset(sys.modules)
-    # run the test
     yield
-    # test teardown (in the reverse-order the modules are inserted)
+    # remove modules in the reverse insertion order
     for name in reversed(list(sys.modules)):
         if name not in sys_module_names:
             del sys.modules[name]

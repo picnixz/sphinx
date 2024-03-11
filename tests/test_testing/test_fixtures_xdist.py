@@ -8,7 +8,6 @@ import pytest
 from .util import SourceInfo, __dump__, xdist_integration
 
 if TYPE_CHECKING:
-    from pathlib import Path
     from typing import Final, Literal, Union
 
     from _pytest.pytester import Pytester
@@ -21,14 +20,6 @@ FOO: Final[str] = 'foo'
 BAR: Final[str] = 'bar'
 
 GROUP_POLICIES: Final[tuple[GroupPolicy, ...]] = (1234, 'sphinx', 'xdist')
-
-
-@pytest.fixture(autouse=True)
-def pytester_source_override(pytester: Pytester, pytester_source: Path) -> Path:
-    source = pytester_source.read_text('utf-8') + '''
-pytest_plugins = [*pytest_plugins, 'xdist']
-'''
-    return pytester.makeconftest(source)
 
 
 def _filecontent(
@@ -64,11 +55,10 @@ import pytest
 @pytest.mark.sphinx('dummy')
 @pytest.mark.test_params()  # ensure an isolation of the tests
 def test_group_{testid}({fixtures}):
-    assert 0
     assert request.config.pluginmanager.has_plugin('xdist')
     assert hasattr(request.config, 'workerinput')
 
-    {__dump__}({testid!r}, str(app.srcdir))
+    {__dump__}(f'tid[{testid}]', str(app.srcdir))
     {__dump__}(f'nid[{testid}]', request.node.nodeid)
     {__dump__}(f'wid[{testid}]', worker_id)
 '''
@@ -87,7 +77,7 @@ class ExtractInfo(NamedTuple):
 
 
 def extract_infos(output: Output, name: str, *, n: int = 1) -> list[ExtractInfo]:
-    srcs = output.findall(name, type=SourceInfo)
+    srcs = output.findall(f'tid[{name}]', type=SourceInfo)
     assert len(srcs) == n
     assert all(srcs)
 

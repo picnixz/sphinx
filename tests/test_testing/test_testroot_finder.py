@@ -49,13 +49,13 @@ def test(testroot_finder, {fixturename}):
 
 
 @pytest.mark.parametrize('value', ['tmp', None])
-def test_configuration_parametrized_testroot_prefix(pytester, pytester_source, value):
+def test_configuration_parametrized_testroot_prefix(pytester, pytester_conftest, value):
     prefix = value or ''  # the constructor of TestRootFinder normalizes the prefix
     chk_testroot_finder_with_fixtures(pytester, 'testroot_prefix', 'prefix', value, prefix)
 
 
 @pytest.mark.parametrize('value', [None, 'default'])
-def test_configuration_parametrized_default_testroot(pytester, pytester_source, value):
+def test_configuration_parametrized_default_testroot(pytester, pytester_conftest, value):
     chk_testroot_finder_with_fixtures(pytester, 'default_testroot', 'default', value, value)
 
 
