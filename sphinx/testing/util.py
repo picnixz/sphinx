@@ -2,15 +2,6 @@
 
 from __future__ import annotations
 
-__all__ = [
-    'assert_node',
-    'etree_parse',
-    'strip_escseq',
-    'SphinxTestApp',
-    'SphinxTestAppLazyBuild',
-    'SphinxTestAppWrapperForSkipBuilding',
-]
-
 import contextlib
 import os
 import re
@@ -38,6 +29,8 @@ if TYPE_CHECKING:
     from docutils.nodes import Node
 
     from sphinx.environment import BuildEnvironment
+
+__all__ = 'SphinxTestApp', 'SphinxTestAppWrapperForSkipBuilding'
 
 
 def assert_node(node: Node, cls: Any = None, xpath: str = "", **kwargs: Any) -> None:
@@ -84,10 +77,6 @@ def etree_parse(path: str) -> Any:
     with warnings.catch_warnings(record=False):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         return ElementTree.parse(path)  # NoQA: S314  # using known data in tests
-
-
-def strip_escseq(text: str) -> str:
-    return re.sub('\x1b.*?m', '', text)
 
 
 class SphinxTestApp(sphinx.application.Sphinx):
@@ -169,10 +158,9 @@ class SphinxTestApp(sphinx.application.Sphinx):
             builddir = srcdir / '_build'
 
         confdir = srcdir
-        # build directory configuration
-        outdir = builddir / buildername
+        outdir = builddir.joinpath(buildername)
         outdir.mkdir(parents=True, exist_ok=True)
-        doctreedir = builddir / 'doctrees'
+        doctreedir = builddir.joinpath('doctrees')
         doctreedir.mkdir(parents=True, exist_ok=True)
         if confoverrides is None:
             confoverrides = {}
@@ -193,9 +181,6 @@ class SphinxTestApp(sphinx.application.Sphinx):
             self.cleanup()
             raise
 
-    def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} buildername={self.builder.name!r}>'
-
     @property
     def status(self) -> StringIO:
         """The in-memory I/O for the application status messages."""
@@ -215,6 +200,9 @@ class SphinxTestApp(sphinx.application.Sphinx):
         _clean_up_global_state()
         with contextlib.suppress(FileNotFoundError):
             os.remove(self.docutils_conf_path)
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} buildername={self.builder.name!r}>'
 
     def build(self, force_all: bool = False, filenames: list[str] | None = None) -> None:
         # TODO(picnixz): remove when #11474 is fixed
@@ -284,6 +272,10 @@ class SphinxTestAppWrapperForSkipBuilding:  # for backward compatibility
             # if listdir is empty, do build.
             self.app.build(*args, **kwargs)
             # otherwise, we can use built cache
+
+
+def strip_escseq(text: str) -> str:
+    return re.sub('\x1b.*?m', '', text)
 
 
 def _clean_up_global_state() -> None:
