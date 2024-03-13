@@ -92,7 +92,7 @@ lint = [
 ]
 test = [
     "pytest>=6.0",
-    "pytest-xdist",
+    "pytest-xdist==3.5.0",
     "html5lib",
     "cython>=3.0",
     "setuptools>=67.0",  # for Cython compilation
@@ -231,11 +231,6 @@ filterwarnings = [
     "ignore::ImportWarning:importlib._bootstrap",
 ]
 log_cli_level = "INFO"
-markers = [
-    "apidoc",
-    "serial",
-    "parallel",
-]
 testpaths = ["tests"]
 xfail_strict = true
 
