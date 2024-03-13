@@ -161,6 +161,9 @@ def find_context(  # NoQA: E302
 ) -> Any:
     """Get a parent node in the given scope.
 
+    Use this function to have a correct typing of the returned object,
+    until ``pytest`` provides a better typing.
+
     :param node: The node to get an ancestor of.
     :param cond: The ancestor type or scope.
     :param default: A default value.
