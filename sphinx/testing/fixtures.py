@@ -68,10 +68,8 @@ class SharedResult:
 
 
 @pytest.fixture()
-def app_params(
-    request: Any, test_params: dict, shared_result: SharedResult,
-    sphinx_test_tempdir: str, rootdir: str,
-) -> _app_params:
+def app_params(request: Any, test_params: dict, shared_result: SharedResult,
+               sphinx_test_tempdir: str, rootdir: str) -> _app_params:
     """
     Parameters that are specified by 'pytest.mark.sphinx' for
     sphinx.application.Sphinx initialization
@@ -138,10 +136,8 @@ def test_params(request: Any) -> dict:
 
 
 @pytest.fixture()
-def app(
-    test_params: dict, app_params: tuple[dict, dict], make_app: Callable,
-    shared_result: SharedResult,
-) -> Generator[SphinxTestApp, None, None]:
+def app(test_params: dict, app_params: tuple[dict, dict], make_app: Callable,
+        shared_result: SharedResult) -> Generator[SphinxTestApp, None, None]:
     """
     Provides the 'sphinx.application.Sphinx' object
     """
