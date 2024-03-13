@@ -1,24 +1,30 @@
-"""Implementation of xdist hooks."""
+"""Hooks to register when the ``xdist`` plugin is active.
+
+Wen ``xdist`` is active, the controller node automatically loads
+this module through :func:`sphinx.testing.plugin.pytest_addhooks`.
+"""
 
 from __future__ import annotations
 
-import os
-import shutil
+__all__ = ()
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import pytest
-    from execnet import XSpec
+    from xdist.workermanage import NodeManager, WorkerController
 
 
-def pytest_xdist_setupnodes(config: pytest.Config, specs: list[XSpec]) -> None:
+def pytest_configure_node(node: WorkerController) -> None:
+    node_config: pytest.Config = node.config
+    # the node's config is not the same as the controller's config
+    assert node_config.pluginmanager.has_plugin('xdist'), 'xdist is not loaded'
+
+    manager: NodeManager = node.nodemanager
+    config: pytest.Config = manager.config
     assert config.pluginmanager.has_plugin('xdist'), 'xdist is not loaded'
-    assert not hasattr(config, 'workerinput'), 'hook must be invoked in the controller node'
 
-    # ensure that the workers inherit the same terminal size
-    size = shutil.get_terminal_size()
-    columns = str(size.columns)
-    columns = os.environ.setdefault('COLUMNS', columns)
-
-    for spec in specs:
-        spec.env['COLUMNS'] = columns
+    # worker nodes do not inherit the 'config.option.dist' value
+    # when used by pytester, so we simply copy it from the main
+    # controller to the worker node
+    node.workerinput['sphinx_xdist_policy'] = config.option.dist

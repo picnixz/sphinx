@@ -1,6 +1,12 @@
+"""Private module containing isolation-related objects and functionalities.
+
+Use literal strings or booleans to indicate isolation policies instead of
+directly using :class:`Isolation` objects, unless it is used internally.
+"""
+
 from __future__ import annotations
 
-__all__ = ['Isolation', 'IsolationPolicy', 'parse_isolation']
+__all__ = ()
 
 from enum import IntEnum
 from enum import auto as _auto
@@ -18,16 +24,17 @@ class Isolation(IntEnum):
     """Copy the original testroot to a unique sources and build directory."""
 
 
-IsolationPolicy = Union[bool, Literal["minimal", "grouped", "always"], Isolation]
+IsolationPolicy = Union[bool, Literal['minimal', 'grouped', 'always']]
 """Allowed values for the isolation policy."""
 
+NormalizableIsolation = Union[IsolationPolicy, Isolation]
+"""Normalizable isolation value."""
 
-def parse_isolation(policy: IsolationPolicy | None) -> Isolation:
+
+def normalize_isolation_policy(policy: NormalizableIsolation) -> Isolation:
+    """Normalize isolation policy into a :class:`Isolation` object."""
     if isinstance(policy, Isolation):
         return policy
-
-    if policy is None:
-        return Isolation.minimal
 
     if isinstance(policy, bool):
         return Isolation.always if policy else Isolation.minimal

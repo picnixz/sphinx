@@ -21,7 +21,6 @@ __all__ = [
 import os
 import warnings
 from contextlib import contextmanager
-from functools import lru_cache
 from typing import TYPE_CHECKING, Literal, overload
 
 import pytest
@@ -169,12 +168,12 @@ def find_context(node: PytestNode, cond: type[NodeType], /, *, include_self: boo
 def find_context(node: PytestNode, cond: type[NodeType], default: DT, /, *, include_self: bool = ...) -> NodeType | DT: ...  # NoQA: E501, E704
 # fmt: on
 def find_context(  # NoQA: E302
-    node: PytestNode,
+    node: Any,
     cond: ScopeName | type[PytestNode],
     /,
-    *default: DT,
+    *default: Any,
     include_self: bool = True,
-) -> PytestNode | DT:
+) -> Any:
     """Get a parent node in the given scope.
 
     :param node: The node to get an ancestor of.
@@ -203,7 +202,6 @@ TestNodeLocation = tuple[str, int]
 """
 
 
-@lru_cache(maxsize=128)
 def get_node_location(node: PytestNode) -> TestNodeLocation | None:
     """The node location ``(fspath, lineno)``, if any.
 
@@ -283,7 +281,7 @@ def check_mark_keywords(
     if extras and node:
         msg = 'unexpected keyword argument(s): %s' % ', '.join(sorted(extras))
         if strict:
-            _mark_fail(mark, msg)
+            _pytest_mark_fail(mark, msg)
 
         _pytest_warn(node, MarkWarning(msg, mark))
         return False
@@ -314,9 +312,6 @@ def pytest_not_raises(*exceptions: type[BaseException]) -> Generator[None, None,
         pytest.fail(f'DID RAISE {exc.__class__}')
 
 
-# private utilities
-
-
 # fmt: off
 @overload
 def _pytest_warn(config: pytest.Config, warning: Warning, /) -> None: ...  # NoQA: E501, E704
@@ -340,7 +335,11 @@ def _pytest_warn(  # NoQA: E302
     such as ``xdist`` are active. Warnings are (apparently) always printed
     on the console.
 
-    :meta private:
+    .. note::
+
+       Although the function is named with a leading underscore, it is
+       still considered part of the public API since otherwise ``pytest``
+       incorrectly considers it as a specification-less hook.
     """
     if isinstance(fmt, Warning):
         warning = fmt
@@ -373,5 +372,6 @@ def _pytest_warn(  # NoQA: E302
     warnings.warn_explicit(warning, category=None, filename=filename, lineno=lineno)
 
 
-def _mark_fail(mark: str, message: str) -> NoReturn:
+def _pytest_mark_fail(mark: str, message: str) -> NoReturn:
+    """:meta private:"""
     pytest.fail(f'pytest.mark.{mark}(): {message}')

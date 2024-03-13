@@ -58,9 +58,9 @@ def _get_update_targets(app):
 
 
 @pytest.fixture(autouse=True)
-def _add_app_info(app, app_extra_info):
-    app_extra_info.update(language=app.config.language)
-    app_extra_info.update(locale_dirs=app.config.locale_dirs)
+def _add_app_info_extras(app, app_info_extras):
+    app_info_extras.update(language=app.config.language)
+    app_info_extras.update(locale_dirs=app.config.locale_dirs)
 
 
 def elem_gettexts(elem):
@@ -159,10 +159,10 @@ def test_text_inconsistency_warnings(app, warning):
                    ' original: %(original)s, translated: %(translated)s\n')
     expected_warning_expr = (
         warning_fmt % {
-        'reftype': 'footnote references',
-        'original': "\\['\\[#\\]_'\\]",
-        'translated': "\\[\\]",
-    } +
+            'reftype': 'footnote references',
+            'original': "\\['\\[#\\]_'\\]",
+            'translated': "\\[\\]",
+        } +
         warning_fmt % {
             'reftype': 'footnote references',
             'original': "\\['\\[100\\]_'\\]",

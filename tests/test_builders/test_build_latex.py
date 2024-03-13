@@ -1404,7 +1404,6 @@ def test_latex_raw_directive(app, status, warning):
     assert 'LaTeX: abc def ghi' in result
 
 
-
 @pytest.mark.sphinx('latex', testroot='latex-index')
 def test_latex_index(app, status, warning):
     app.build()

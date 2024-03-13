@@ -14,8 +14,10 @@ import pytest
 import sphinx
 import sphinx.locale
 import sphinx.pycode
+from sphinx.testing._facade import get_tmp_path_factory
 from sphinx.testing._warnings import FixtureWarning
 from sphinx.testing._xdist import is_pytest_xdist_enabled
+from sphinx.testing.pytest_util import _pytest_warn
 from sphinx.testing.util import _clean_up_global_state
 
 if TYPE_CHECKING:
@@ -48,15 +50,24 @@ os.environ['SPHINX_AUTODOC_RELOAD_MODULES'] = '1'
 
 
 def pytest_configure(config: Config) -> None:
+    config.addinivalue_line('markers', 'serial(): mark a test as non-xdist friendly')
     config.addinivalue_line('markers', 'unload(*pattern): unload matching modules')
     config.addinivalue_line('markers', 'unload_modules(*names, raises=False): unload modules')
 
+    config.addinivalue_line(
+        'markers',
+        'apidoc(*, coderoot="test-root", excludes=[], options=[]): '
+        'sphinx-apidoc command-line options (see test_ext_apidoc).',
+    )
+
 
 def pytest_report_header(config: Config) -> str:
-    header = f"libraries: Sphinx-{sphinx.__display_version__}, docutils-{docutils.__version__}"
-    if hasattr(config, '_tmp_path_factory'):
-        header += f"\nbase tmp_path: {config._tmp_path_factory.getbasetemp()}"
-    return header
+    headers = {
+        'libraries': f'Sphinx-{sphinx.__display_version__}, docutils-{docutils.__version__}',
+    }
+    if (factory := get_tmp_path_factory(config, None)) is not None:
+        headers['base tmp_path'] = factory.getbasetemp()
+    return '\n'.join(f'{key}: {value}' for key, value in headers.items())
 
 
 # The test modules in which tests should not be executed in parallel mode,
@@ -75,7 +86,6 @@ def pytest_report_header(config: Config) -> str:
 _SERIAL_TESTS: dict[str, Sequence[str] | None] = {
     'tests/test_builders/test_build_linkcheck.py': None,
     'tests/test_intl/test_intl.py': None,
-    'tests/test_testing/**': None,
 }
 
 
@@ -84,45 +94,50 @@ def _serial_matching(relfspath: str, pattern: str) -> bool:
     return fnmatch.fnmatch(relfspath, pattern)
 
 
+@lru_cache(maxsize=512)
+def _findall_main_keys(relfspath: str) -> tuple[str, ...]:
+    return tuple(key for key in _SERIAL_TESTS if _serial_matching(relfspath, key))
+
+
 def _test_basename(name: str) -> str:
     """Get the test name without the parametrization part from an item name."""
-    return name[:name.find('[')] if '[' in name else name
+    if name.find('[') < name.find(']'):
+        # drop the parametrized part
+        return name[:name.find('[')]
+    return name
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_itemcollected(item: Item) -> None:
+    if item.get_closest_marker('serial'):
+        return
+
+    # check whether the item should be marked with ``@pytest.mark.serial()``
+    relfspath, _, _ = item.location
+    for key in _findall_main_keys(relfspath):
+        names = _SERIAL_TESTS[key]
+        if names is None or _test_basename(item.name) in names:
+            item.add_marker(pytest.mark.serial())
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session: Session, config: Config, items: list[Item]) -> None:
     if not is_pytest_xdist_enabled(config):
-        # when the xdist plugin is inactive, tests are executed normally
-        # whether they are marked as parallel or serial
+        # ignore ``@pytest.mark.serial()`` when ``xdist`` is inactive
         return
 
-    select, ignore = [], []
-    for item in items:
-        if item.get_closest_marker('serial'):
-            ignore.append(item)
-            continue
-
-        relfspath, _, _ = item.location
-
-        for pattern, names in _SERIAL_TESTS.items():
-            if _serial_matching(relfspath, pattern):
-                if names is None or _test_basename(item.name) in names:
-                    item.add_marker('serial')
+    # only select items that are marked (manually or automatically) with 'serial'
+    items[:] = [item for item in items if item.get_closest_marker('serial') is None]
 
 
 @pytest.fixture(scope='session')
-def rootdir(request: FixtureRequest) -> Path:
-    return getattr(request, 'param', Path(__file__).parent.resolve() / 'roots')
+def rootdir() -> Path:
+    return Path(__file__).parent.resolve() / 'roots'
 
 
 @pytest.fixture(scope='session')
-def default_testroot(request: FixtureRequest) -> str:
-    return getattr(request, 'param', 'minimal')
-
-
-@pytest.fixture(scope='session')
-def testroot_prefix(request: FixtureRequest) -> str:
-    return getattr(request, 'param', 'test-')
+def default_testroot() -> str:
+    return 'minimal'
 
 
 @pytest.fixture(autouse=True)
@@ -138,7 +153,7 @@ def _cleanup_docutils() -> Generator[None, None, None]:
 def _do_unload(request: FixtureRequest) -> Generator[None, None, None]:
     """Explicitly remove modules.
 
-    Modules to remove can be specified using either syntax::
+    The modules to remove can be specified as follows::
 
         # remove any module matching one the regular expressions
         @pytest.mark.unload('foo.*', 'bar.*')
@@ -174,7 +189,8 @@ def _do_unload(request: FixtureRequest) -> Generator[None, None, None]:
         return
 
     for modname in expect_targets - sys.modules.keys():
-        request.node.warn(FixtureWarning(f'module was not loaded: {modname!r}', '_unload'))
+        warning = FixtureWarning(f'module was not loaded: {modname!r}', '_unload')
+        _pytest_warn(request, warning)
 
     # teardown by removing from the imported modules the requested modules
     silent_targets.update(frozenset(sys.modules) & expect_targets)

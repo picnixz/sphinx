@@ -29,7 +29,7 @@ def test_mark_sphinx_with_builder(app_params):
 
 
 @pytest.mark.parametrize(('sphinx_isolation', 'policy'), [
-    (None, 'minimal'), (False, 'minimal'), (True, 'always'),
+    (False, 'minimal'), (True, 'always'),
     ('minimal', 'minimal'), ('grouped', 'grouped'), ('always', 'always'),
 ])
 @pytest.mark.sphinx('dummy')
@@ -40,10 +40,21 @@ def test_mark_sphinx_with_isolation(app_params, sphinx_isolation, policy):
 
 
 @pytest.mark.sphinx('dummy')
-@pytest.mark.test_params(shared_result='foo')
-def test_mark_sphinx_with_shared_result(app_params):
+@pytest.mark.test_params()
+def test_mark_sphinx_with_implicit_shared_result(app_params, test_params):
     shared_result = app_params.kwargs['shared_result']
-    assert shared_result == 'foo'
+    assert shared_result == test_params['shared_result']
 
     srcdir = app_params.kwargs['srcdir']
-    assert srcdir.name == 'minimal-foo'
+    assert srcdir.name == f'minimal-{shared_result}'
+
+
+@pytest.mark.sphinx('dummy')
+@pytest.mark.test_params(shared_result='abc123')
+def test_mark_sphinx_with_explicit_shared_result(app_params, test_params):
+    shared_result = app_params.kwargs['shared_result']
+    assert shared_result == test_params['shared_result']
+    assert shared_result == 'abc123'
+
+    srcdir = app_params.kwargs['srcdir']
+    assert srcdir.name == 'minimal-abc123'

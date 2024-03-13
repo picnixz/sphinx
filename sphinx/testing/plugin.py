@@ -6,39 +6,33 @@ import os
 import shutil
 import subprocess
 import sys
-from io import StringIO
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    TypedDict,
-    cast,
-)
+from typing import TYPE_CHECKING, Optional, cast
 
 import pytest
 
-from sphinx.testing._fixtures import (
+from sphinx.testing._cache import ModuleCache
+from sphinx.testing._isolation import Isolation
+from sphinx.testing._markers import (
     AppParams,
-    node_location_id,
+    get_location_id,
     process_isolate,
     process_sphinx,
     process_test_params,
 )
-from sphinx.testing._isolation import Isolation
-from sphinx.testing._xdist import is_pytest_xdist_enabled, set_pytest_xdist_group
+from sphinx.testing._xdist import is_pytest_xdist_enabled
 from sphinx.testing.pytest_util import TestRootFinder, find_context
 from sphinx.testing.util import SphinxTestApp, SphinxTestAppLazyBuild
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
+    from io import StringIO
     from pathlib import Path
-    from typing import (
-        Any,
-    )
+    from typing import Any, Final
 
-    from sphinx.testing._fixtures import TestParams
     from sphinx.testing._isolation import IsolationPolicy
+    from sphinx.testing._markers import TestParams
 
-DEFAULT_ENABLED_MARKERS = [
+_MARKERS: Final[list[str]] = [
     (
         'sphinx('
         'buildername="html", /, *, '
@@ -54,17 +48,22 @@ DEFAULT_ENABLED_MARKERS = [
 ]
 
 
+###############################################################################
+# pytest hooks
+###############################################################################
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers."""
-    for marker in DEFAULT_ENABLED_MARKERS:
+    for marker in _MARKERS:
         config.addinivalue_line('markers', marker)
 
 
 def pytest_addhooks(pluginmanager: pytest.PytestPluginManager) -> None:
-    if pluginmanager.hasplugin('xdist'):
+    if pluginmanager.has_plugin('xdist'):
         from sphinx.testing import _xdist_hooks
 
-        pluginmanager.register(_xdist_hooks)
+        pluginmanager.register(_xdist_hooks, name='sphinx-xdist-hooks')
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -86,8 +85,8 @@ def pytest_collection_modifyitems(
     # location of a test item.
     #
     # In addition, custom plugins that can change the meaning
-    # of ``@pytest.mark.parametrize`` or that behave similarly
-    # might break our construction, so use them carefully!
+    # of ``@pytest.mark.parametrize`` might break this plugin,
+    # so use them carefully!
 
     for item in items:
         if (
@@ -95,23 +94,27 @@ def pytest_collection_modifyitems(
             and item.get_closest_marker('sphinx_no_default_xdist') is None
         ):
             fspath, lineno, _ = item.location  # this is xdist-agnostic
-            xdist_group = node_location_id((fspath, lineno or -1))
-            set_pytest_xdist_group(item, xdist_group)
+            xdist_group = get_location_id((fspath, lineno or -1))
+            item.add_marker(pytest.mark.xdist_group(xdist_group), append=True)
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_teardown(item: pytest.Item) -> Generator[None, None, None]:
-    # teardown of fixtures
-    yield
-    # now the fixtures have executed their teardowns
-    if APP_INFO_KEY in item.stash:
-        info: _AppInfo = item.stash[APP_INFO_KEY]
-        del item.stash[APP_INFO_KEY]
+    yield  # execute the fixtures teardowns
+
+    # after tearing down the fixtures, we add some report sections
+    # for later; without ``xdist``, we would have printed whatever
+    # we wanted during the fixture teardown but since ``xdist`` is
+    # not print-friendly, we must use the report sections
+
+    if _APP_INFO_KEY in item.stash:
+        info: _AppInfo = item.stash[_APP_INFO_KEY]
+        del item.stash[_APP_INFO_KEY]
 
         text = info.render()
 
         if (
-            # do not deduplicate the report info when using -rA
+            # do not duplicate the report info when using -rA
             'A' not in item.config.option.reportchars
             and (item.config.option.capture == 'no' or item.config.get_verbosity() >= 2)
             # see: https://pytest-xdist.readthedocs.io/en/stable/known-limitations.html
@@ -122,6 +125,11 @@ def pytest_runtest_teardown(item: pytest.Item) -> Generator[None, None, None]:
             print('\n\n', f'[{item.nodeid}]', '\n', text, sep='', end='')  # NoQA: T201
 
         item.add_report_section(f'teardown [{item.nodeid}]', 'fixture %r' % 'app', text)
+
+
+###############################################################################
+# sphinx fixtures
+###############################################################################
 
 
 @pytest.fixture(scope='session')
@@ -137,27 +145,27 @@ def sphinx_builder(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture()
-def sphinx_isolation(request: pytest.FixtureRequest) -> IsolationPolicy | None:
+def sphinx_isolation() -> IsolationPolicy:
     """Fixture for the default isolation policy."""
-    return getattr(request, 'param', False)
+    return False
 
 
 @pytest.fixture()
-def rootdir(request: pytest.FixtureRequest) -> str | os.PathLike[str] | None:
+def rootdir() -> str | os.PathLike[str] | None:
     """Fixture for the directory containing the testroot directories."""
-    return getattr(request, 'param', None)
+    return None
 
 
 @pytest.fixture()
-def testroot_prefix(request: pytest.FixtureRequest) -> str | None:
+def testroot_prefix() -> str | None:
     """Fixture for the testroot directories prefix."""
-    return getattr(request, 'param', 'test-')
+    return 'test-'
 
 
 @pytest.fixture()
-def default_testroot(request: pytest.FixtureRequest) -> str | None:
+def default_testroot() -> str | None:
     """Dynamic fixture for the default testroot ID."""
-    return getattr(request, 'param', 'root')
+    return 'root'
 
 
 @pytest.fixture()
@@ -168,60 +176,6 @@ def testroot_finder(
 ) -> TestRootFinder:
     """Fixture for the testroot finder object."""
     return TestRootFinder(rootdir, testroot_prefix, default_testroot)
-
-
-class _CacheEntry(TypedDict):
-    """Cached entry in a :class:`SharedResult`."""
-
-    status: str
-    """The application's status output."""
-    warning: str
-    """The application's warning output."""
-
-
-class _CacheFrame(TypedDict):
-    """The restored cached value."""
-
-    status: StringIO
-    """An I/O object initialized to the cached status output."""
-    warning: StringIO
-    """An I/O object initialized to the cached warning output."""
-
-
-class ModuleCache:
-    """:meta private:"""
-
-    __slots__ = ('_cache',)
-
-    def __init__(self) -> None:
-        self._cache: dict[str, _CacheEntry] = {}
-
-    def clear(self) -> None:
-        """Clear the cache."""
-        self._cache.clear()
-
-    def store(self, key: str, app: SphinxTestApp) -> None:
-        """Cache some attributes from *app* in the cache.
-
-        :param key: The cache key (usually a ``shared_result``).
-        :param app: An application whose attributes are cached.
-
-        The application's attributes being cached are:
-
-        * The string value of :attr:`SphinxTestApp.status`.
-        * The string value of :attr:`SphinxTestApp.warning`.
-        """
-        if key not in self._cache:
-            status, warning = app.status.getvalue(), app.warning.getvalue()
-            self._cache[key] = {'status': status, 'warning': warning}
-
-    def restore(self, key: str) -> _CacheFrame | None:
-        """Reconstruct the cached attributes for *key*."""
-        if key not in self._cache:
-            return None
-
-        data = self._cache[key]
-        return {'status': StringIO(data['status']), 'warning': StringIO(data['warning'])}
 
 
 def _init_sources(src: str | None, dst: Path, isolation: Isolation) -> None:
@@ -248,10 +202,9 @@ def app_params(
     request: pytest.FixtureRequest,
     test_params: TestParams,
     module_cache: ModuleCache,
-    # the value of the fixtures below can be defined at the test file level
     sphinx_test_tempdir: Path,
     sphinx_builder: str,
-    sphinx_isolation: IsolationPolicy | None,
+    sphinx_isolation: IsolationPolicy,
     testroot_finder: TestRootFinder,
 ) -> AppParams:
     """Parameters that are specified by ``pytest.mark.sphinx``.
@@ -306,15 +259,16 @@ class _AppInfo:
     outdir: str
     """The absolute path to the application's output directory."""
 
-    # the fields below will be updated when in the teardown phase
-    # of ``app`` or when requesting ``app_extra_info``
+    # fields below are updated when tearing down :func:`app`
+    # or requesting :func:`app_test_info` (only *extras* is
+    # publicly exposed by the latter)
 
     messages: str = dataclasses.field(default='', init=False)
     """The application's status messages."""
     warnings: str = dataclasses.field(default='', init=False)
     """The application's warnings messages."""
     extras: dict[str, Any] = dataclasses.field(default_factory=dict, init=False)
-    """Extra information injected by additional fixtures upon teardown."""
+    """Attributes added by :func:`sphinx.testing.plugin.app_test_info`."""
 
     def render(self) -> str:
         """Format the report as a string to print or render."""
@@ -337,35 +291,45 @@ class _AppInfo:
         return '\n'.join(lines)
 
 
-APP_INFO_KEY: pytest.StashKey[_AppInfo] = pytest.StashKey()
+_APP_INFO_KEY: pytest.StashKey[_AppInfo] = pytest.StashKey()
+
 
 def _get_app_info(
     request: pytest.FixtureRequest,
     app: SphinxTestApp,
-    app_params: AppParams
+    app_params: AppParams,
 ) -> _AppInfo:
-    if APP_INFO_KEY in request.node.stash:
-        info = request.node.stash[APP_INFO_KEY]
-    else:
-        shared_result = app_params.kwargs['shared_result']
-        testroot_path = app_params.kwargs['testroot_path']
-        cast(pytest.Stash, request.node.stash)[APP_INFO_KEY] = info = _AppInfo(
+    stash = cast(pytest.Stash, request.node.stash)
+    if _APP_INFO_KEY not in stash:
+        stash[_APP_INFO_KEY] = _AppInfo(
             builder=app.builder.name,
-            testroot_path=testroot_path, shared_result=shared_result,
-            srcdir=os.fsdecode(app.srcdir), outdir=os.fsdecode(app.outdir),
+            testroot_path=app_params.kwargs['testroot_path'],
+            shared_result=app_params.kwargs['shared_result'],
+            srcdir=os.fsdecode(app.srcdir),
+            outdir=os.fsdecode(app.outdir),
         )
-    return info
+    return stash[_APP_INFO_KEY]
 
 
 @pytest.fixture()
-def app_extra_info(
+def app_info_extras(
     request: pytest.FixtureRequest,
-    # fixture is not used but is needed to make this fixture dependent of ``app``
+    # ``app`` is not used but is marked as a dependency
     app: SphinxTestApp,
-    # fixture is already a dependency of ``app``
+    # ``app_params`` is already a dependency of ``app``
     app_params: AppParams,
-) -> Generator[dict[str, Any], None, None]:
-    yield _get_app_info(request, app, app_params).extras
+) -> dict[str, Any]:
+    """Fixture to update the information to render at the end of a test.
+
+    Use this fixture in a ``conftest.py`` file or in a test file as follows::
+
+        @pytest.fixture(autouse=True)
+        def _add_app_info_extras(app, app_info_extras):
+            app_info_extras.update(my_extra=1234)
+            app_info_extras.update(app_extras=app.extras)
+    """
+    app_info = _get_app_info(request, app, app_params)
+    return app_info.extras
 
 
 @pytest.fixture()
@@ -467,17 +431,16 @@ def if_graphviz_found(app: SphinxTestApp) -> None:  # NoQA: PT004
     pytest.skip('graphviz "dot" is not available')
 
 
-HOST_DNS_LOOKUP_ERROR = pytest.StashKey[Optional[str]]()
+_HOST_ONLINE_ERROR = pytest.StashKey[Optional[str]]()
 
 
-def _get_host_dns_lookup_error() -> str | None:
+def _query(address: tuple[str, int]) -> str | None:
     import socket
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        # query a DNS server to check for internet connection
         try:
             sock.settimeout(5)
-            sock.connect(('1.1.1.1', 80))
+            sock.connect(address)
         except OSError as exc:
             # other type of errors are propagated
             return str(exc)
@@ -485,12 +448,32 @@ def _get_host_dns_lookup_error() -> str | None:
 
 
 @pytest.fixture(scope='session')
-def if_online(request: pytest.FixtureRequest) -> None:  # NoQA: PT004
-    """Skip the test if the host has no connection."""
-    if HOST_DNS_LOOKUP_ERROR not in request.session.stash:
+def sphinx_remote_test_address() -> tuple[str, int]:
+    """Address to which a query is made to check that the host is online.
+
+    By default, onlineness is tested by querying the DNS server ``1.1.1.1``
+    but users concerned about privacy might change it in ``conftest.py``.
+    """
+    return ('1.1.1.1', 80)
+
+
+@pytest.fixture(scope='session')
+def if_online(  # NoQA: PT004
+    request: pytest.FixtureRequest,
+    sphinx_remote_test_address: tuple[str, int],
+) -> None:
+    """Skip the test if the host has no connection.
+
+    Usage::
+
+        @pytest.mark.usefixtures('if_online')
+        def test_if_host_is_online(): ...
+    """
+    if _HOST_ONLINE_ERROR not in request.session.stash:
         # do not use setdefault() to avoid creating a socket connection
-        request.session.stash[HOST_DNS_LOOKUP_ERROR] = _get_host_dns_lookup_error()
-    if (error := request.session.stash[HOST_DNS_LOOKUP_ERROR]) is not None:
+        lookup_error = _query(sphinx_remote_test_address)
+        request.session.stash[_HOST_ONLINE_ERROR] = lookup_error
+    if (error := request.session.stash[_HOST_ONLINE_ERROR]) is not None:
         pytest.skip('host appears to be offline (%s)' % error)
 
 

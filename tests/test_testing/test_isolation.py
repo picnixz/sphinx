@@ -2,121 +2,120 @@ from __future__ import annotations
 
 import uuid
 
-from .util import SourceInfo, __dump__, integration
-
-
-def test_grouped_isolation_no_shared_result(pytester):
-    def gen(testid: str) -> str:
-        return f'''
 import pytest
 
+from ._const import MAGICO
+from ._util import SourceInfo
+
+
+@pytest.fixture()
+def random_uuid() -> str:
+    return uuid.uuid4().hex
+
+
+def test_grouped_isolation_no_shared_result(e2e):
+    def gen(testid: str) -> str:
+        return f'''
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic')
 @pytest.mark.isolate('grouped')
-def test_group_{testid}({__dump__}, app, value):
-    {__dump__}({testid!r}, str(app.srcdir))
+def test_group_{testid}({MAGICO}, app, value):
+    {MAGICO}({testid!r}, str(app.srcdir))
 '''
+    e2e.write(['import pytest', gen('a'), gen('b')])
 
-    pytester.makepyfile('\n'.join(map(gen, ('a', 'b'))))
-    output = integration(pytester, count=4)
+    output = e2e.run()
 
-    srcs_a = output.findall('a', type=SourceInfo)
+    srcs_a = output.findall('a', t=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert len(set(srcs_a)) == 1
 
-    srcs_b = output.findall('b', type=SourceInfo)
+    srcs_b = output.findall('b', t=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 
     srcinfo_a, srcinfo_b = srcs_a[0], srcs_b[0]
-    assert srcinfo_a.namespace == srcinfo_b.namespace  # same module
-    assert srcinfo_a.env_crc32 == srcinfo_b.env_crc32  # same config
-    assert srcinfo_a.srcdir_id != srcinfo_b.srcdir_id  # diff shared id
+    assert srcinfo_a.basenode == srcinfo_b.basenode  # same namespace
+    assert srcinfo_a.checksum == srcinfo_b.checksum  # same config
+    assert srcinfo_a.filename != srcinfo_b.filename  # diff shared id
 
 
-def test_shared_result(pytester):
-    shared_id = uuid.uuid4().hex
-
+def test_shared_result(e2e, random_uuid):
     def gen(testid: str) -> str:
         return f'''
-import pytest
-
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic')
-@pytest.mark.test_params(shared_result={shared_id!r})
-def test_group_{testid}({__dump__}, app, value):
-    {__dump__}({testid!r}, str(app.srcdir))
+@pytest.mark.test_params(shared_result={random_uuid!r})
+def test_group_{testid}({MAGICO}, app, value):
+    {MAGICO}({testid!r}, str(app.srcdir))
 '''
-    pytester.makepyfile('\n'.join(map(gen, ('a', 'b'))))
-    output = integration(pytester, count=4)
+    e2e.write('import pytest')
+    e2e.write(gen('a'))
+    e2e.write(gen('b'))
+    output = e2e.run()
 
-    srcs_a = output.findall('a', type=SourceInfo)
+    srcs_a = output.findall('a', t=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert len(set(srcs_a)) == 1
 
-    srcs_b = output.findall('b', type=SourceInfo)
+    srcs_b = output.findall('b', t=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 
     assert srcs_a[0] == srcs_b[0]
 
 
-def test_shared_result_different_config(pytester):
-    shared_id = uuid.uuid4().hex
-
+def test_shared_result_different_config(e2e, random_uuid):
     def gen(testid: str) -> str:
         return f'''
-import pytest
-
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic', confoverrides={{"author": {testid!r}}})
-@pytest.mark.test_params(shared_result={shared_id!r})
-def test_group_{testid}({__dump__}, app, value):
-    {__dump__}({testid!r}, str(app.srcdir))
+@pytest.mark.test_params(shared_result={random_uuid!r})
+def test_group_{testid}({MAGICO}, app, value):
+    {MAGICO}({testid!r}, str(app.srcdir))
 '''
-    pytester.makepyfile('\n'.join(map(gen, ('a', 'b'))))
-    output = integration(pytester, count=4)
+    e2e.write('import pytest')
+    e2e.write(gen('a'))
+    e2e.write(gen('b'))
+    output = e2e.run()
 
-    srcs_a = output.findall('a', type=SourceInfo)
+    srcs_a = output.findall('a', t=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert len(set(srcs_a)) == 1
 
-    srcs_b = output.findall('b', type=SourceInfo)
+    srcs_b = output.findall('b', t=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 
     srcinfo_a, srcinfo_b = srcs_a[0], srcs_b[0]
-    assert srcinfo_a.namespace == srcinfo_b.namespace  # same module
-    assert srcinfo_a.env_crc32 != srcinfo_b.env_crc32  # diff config
-    assert srcinfo_a.srcdir_id == srcinfo_b.srcdir_id  # same shared id
+    assert srcinfo_a.basenode == srcinfo_b.basenode  # same namespace
+    assert srcinfo_a.checksum != srcinfo_b.checksum  # diff config
+    assert srcinfo_a.filename == srcinfo_b.filename  # same shared id
 
 
-def test_shared_result_different_module(pytester):
-    shared_id = uuid.uuid4().hex
-
+def test_shared_result_different_module(e2e, random_uuid):
     def gen(testid: str) -> str:
         return f'''
 import pytest
 
 @pytest.mark.parametrize('value', [1, 2])
 @pytest.mark.sphinx('dummy', testroot='basic')
-@pytest.mark.test_params(shared_result={shared_id!r})
-def test_group_{testid}({__dump__}, app, value):
-    {__dump__}({testid!r}, str(app.srcdir))
+@pytest.mark.test_params(shared_result={random_uuid!r})
+def test_group_{testid}({MAGICO}, app, value):
+    {MAGICO}({testid!r}, str(app.srcdir))
 '''
-    pytester.makepyfile(test_a=gen('a'))
-    pytester.makepyfile(test_b=gen('b'))
-    output = integration(pytester, count=4)
+    e2e.makepytest(a=gen('a'), b=gen('b'))
+    output = e2e.run()
 
-    srcs_a = output.findall('a', type=SourceInfo)
+    srcs_a = output.findall('a', t=SourceInfo)
     assert len(srcs_a) == 2  # two sub-tests
     assert srcs_a[0] == srcs_a[1]
 
-    srcs_b = output.findall('b', type=SourceInfo)
+    srcs_b = output.findall('b', t=SourceInfo)
     assert len(srcs_b) == 2  # two sub-tests
     assert len(set(srcs_b)) == 1
 
     srcinfo_a, srcinfo_b = srcs_a[0], srcs_b[0]
-    assert srcinfo_a.namespace != srcinfo_b.namespace  # diff module
-    assert srcinfo_a.env_crc32 == srcinfo_b.env_crc32  # same config
-    assert srcinfo_a.srcdir_id == srcinfo_b.srcdir_id  # same shared id
+    assert srcinfo_a.basenode != srcinfo_b.basenode  # diff namespace
+    assert srcinfo_a.checksum == srcinfo_b.checksum  # same config
+    assert srcinfo_a.filename == srcinfo_b.filename  # same shared id

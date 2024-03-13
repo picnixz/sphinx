@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = [
-    'SphinxTestingWarning', 'NodeWarning', 'MarkWarning', 'FixtureWarning',
-]
+__all__ = ()
 
 from _pytest.warning_types import PytestWarning
 
@@ -20,8 +18,8 @@ class NodeWarning(SphinxTestingWarning):
 class MarkWarning(NodeWarning):
     """A warning emitted when parsing a marker."""
 
-    def __init__(self, message: str, mark: str | None = None) -> None:
-        message = f'@pytest.mark.{mark}(): {message}' if mark else message
+    def __init__(self, message: str, markname: str | None = None) -> None:
+        message = f'@pytest.mark.{markname}(): {message}' if markname else message
         super().__init__(message)
 
 

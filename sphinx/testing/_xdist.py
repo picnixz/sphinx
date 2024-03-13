@@ -8,14 +8,13 @@ called before the ``pytest_cmdline_main`` hook.
 
 from __future__ import annotations
 
+__all__ = ()
+
 from typing import TYPE_CHECKING, Literal
 
-import pytest
-
-from sphinx.testing.pytest_util import get_mark_parameters
-
 if TYPE_CHECKING:
-    from _pytest.nodes import Node as PytestNode
+    import pytest
+    pass
 
 #: Scheduling policy for :mod:`xdist` specified by :option:`!--dist`.
 Policy = Literal['no', 'each', 'load', 'loadscope', 'loadfile', 'loadgroup', 'worksteal']
@@ -26,12 +25,17 @@ def get_xdist_policy(config: pytest.Config) -> Policy:
 
     Use ``get_xdist_policy(config) != 'no'`` to determine whether the plugin
     is active and loaded or not.
-
-    On systems without the :mod:`!xdist` module, the ``dist`` option does
-    not even exist in the first place and thus using ``config.option.dist``
-    would raise an :exc:`AttributeError`.
     """
+    # On systems without the :mod:`!xdist` module, the ``dist`` option does
+    # not even exist in the first place and thus using ``config.option.dist``
+    # would raise an :exc:`AttributeError`.
     if config.pluginmanager.has_plugin('xdist'):
+        # worker nodes do not inherit the 'config.option.dist' value
+        # when used by pytester, but since we have a hook that adds
+        # them as a worker input, we can retrieve it correctly even
+        # if we are not in the controller node
+        if hasattr(config, 'workerinput'):
+            return config.workerinput['sphinx_xdist_policy']
         return config.option.dist
     return 'no'
 
@@ -68,29 +72,3 @@ def is_pytest_xdist_worker(config: pytest.Config) -> bool:
        sense that it works even if the :mod:`xdist` plugin is inactive.
     """
     return is_pytest_xdist_enabled(config) and hasattr(config, 'workerinput')
-
-
-def get_pytest_xdist_group(node: PytestNode, default: str = 'default', /) -> str | None:
-    """Get the :func:`!pytest.mark.xdist_group` of a *node*, if any.
-
-    :param node: The pytest node to parse.
-    :param default: The default group if the marker has no argument.
-    :return: The group name or ``None`` when :mod:`!xdist` is inactive.
-    """
-    if (
-        not is_pytest_xdist_enabled(node.config)
-        or node.get_closest_marker('xdist_group') is None
-    ):
-        return None
-
-    args, kwargs = get_mark_parameters(node, 'xdist_group')
-    return args[0] if args else kwargs.get('name', default)
-
-
-def set_pytest_xdist_group(node: PytestNode, group: str, /, *, append: bool = True) -> None:
-    """Add a ``@pytest.mark.xdist_group(group)`` to *node*.
-
-    This is a no-op if :mod:`!xdist` is inactive.
-    """
-    if is_pytest_xdist_enabled(node.config):
-        node.add_marker(pytest.mark.xdist_group(group), append=append)
