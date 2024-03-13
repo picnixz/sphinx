@@ -1,27 +1,11 @@
 from __future__ import annotations
 
-__all__ = [
-    # discovery utilities
-    'TestRootFinder',
-    # nodes utilities
-    'ScopeName',
-    'get_node_type_by_scope',
-    'find_context',
-    # node location
-    'TestNodeLocation',
-    'get_node_location',
-    # marker utilities
-    'get_mark_parameters',
-    'check_mark_keywords',
-    'stack_pytest_markers',
-    # testing utilities
-    'pytest_not_raises',
-]
+__all__ = ()
 
 import os
 import warnings
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, Literal, final, overload
 
 import pytest
 from _pytest import nodes
@@ -39,6 +23,7 @@ if TYPE_CHECKING:
     NodeType = TypeVar('NodeType', bound="PytestNode")
 
 
+@final
 class TestRootFinder:
     """Object responsible for finding the testroot files in *rootdir*.
 
@@ -122,9 +107,9 @@ def get_node_type_by_scope(scope: Literal['session']) -> type[pytest.Session]: .
 @overload
 def get_node_type_by_scope(scope: Literal['package']) -> type[pytest.Package]: ...  # NoQA: E501, E704
 @overload
-def get_node_type_by_scope(scope: Literal['module']) -> type[pytest.Module]: ...  # NoQA: E501, E704
+def get_node_type_by_scope(scope: Literal['module']) -> type[pytest.Module]: ...  # NoQA: E704
 @overload
-def get_node_type_by_scope(scope: Literal['class']) -> type[pytest.Class]: ...  # NoQA: E501, E704
+def get_node_type_by_scope(scope: Literal['class']) -> type[pytest.Class]: ...  # NoQA: E704
 @overload
 def get_node_type_by_scope(scope: Literal['function']) -> type[pytest.Function]: ...  # NoQA: E501, E704
 # fmt: on
@@ -314,7 +299,7 @@ def pytest_not_raises(*exceptions: type[BaseException]) -> Generator[None, None,
 
 # fmt: off
 @overload
-def _pytest_warn(config: pytest.Config, warning: Warning, /) -> None: ...  # NoQA: E501, E704
+def _pytest_warn(config: pytest.Config, warning: Warning, /) -> None: ...  # NoQA: E704
 @overload
 def _pytest_warn(config: pytest.Config, fmt: Any, /, *args: Any, category: type[Warning] | None = ...) -> None: ...  # NoQA: E501, E704
 @overload
@@ -322,18 +307,20 @@ def _pytest_warn(request: pytest.FixtureRequest, warning: Warning, /) -> None: .
 @overload
 def _pytest_warn(request: pytest.FixtureRequest, fmt: Any, /, *args: Any, category: type[Warning] | None = ...) -> None: ...  # NoQA: E501, E704
 @overload
-def _pytest_warn(node: PytestNode, warning: Warning, /) -> None: ...  # NoQA: E501, E704
+def _pytest_warn(node: PytestNode, warning: Warning, /) -> None: ...  # NoQA: E704
 @overload
 def _pytest_warn(node: PytestNode, fmt: Any, /, *args: Any, category: type[Warning] | None = ...) -> None: ...  # NoQA: E501, E704
 # fmt: on
 def _pytest_warn(  # NoQA: E302
     ctx: Any, fmt: Any, /, *args: Any, category: type[Warning] | None = None,
 ) -> None:
-    """Helper for emitting a warning on a pytest object.
+    """Public helper for emitting a warning on a pytest object.
 
     This is typically useful for debugging when plugins capturing ``print``
     such as ``xdist`` are active. Warnings are (apparently) always printed
     on the console.
+
+    :meta public:
 
     .. note::
 
