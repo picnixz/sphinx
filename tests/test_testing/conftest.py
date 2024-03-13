@@ -42,12 +42,7 @@ def _pytester_pyprojecttoml(pytester: Pytester) -> None:
     # directly invoked from the CLI.
     pytester.makepyprojecttoml(f'''
 [tool.pytest.ini_options]
-addopts = [
-    "-ra",
-    "--import-mode=prepend",
-    "--strict-config",
-    "--strict-markers",
-]
+addopts = ["--import-mode=prepend", "--strict-config", "--strict-markers"]
 pythonpath = [{PROJECT_PATH!r}]
 xfail_strict = true
 ''')

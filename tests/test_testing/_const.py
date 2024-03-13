@@ -16,8 +16,8 @@ PROJECT_PATH: Final[str] = os.path.realpath(os.path.dirname(os.path.dirname(sphi
 SPHINX_PLUGIN_NAME: Final[str] = 'sphinx.testing.plugin'
 MAGICO_PLUGIN_NAME: Final[str] = 'tests.test_testing.magico'
 
-MAGICO: Final[str] = 'sphinx_magic_writer'
-"""Magical name to use for writing a "debug" test message.
+MAGICO: Final[str] = 'sphinx_magico'
+"""Magical fixture name to use for writing a "debug" test message.
 
 See :mod:`test_magico` for usage.
 """
