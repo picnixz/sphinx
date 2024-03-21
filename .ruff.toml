@@ -306,7 +306,6 @@ select = [
     "S317",  # Using `xml` to parse untrusted data is known to be vulnerable to XML attacks; use `defusedxml` equivalents
     "S318",  # Using `xml` to parse untrusted data is known to be vulnerable to XML attacks; use `defusedxml` equivalents
     "S319",  # Using `xml` to parse untrusted data is known to be vulnerable to XML attacks; use `defusedxml` equivalents
-    "S320",  # Using `lxml` to parse untrusted data is known to be vulnerable to XML attacks
     "S321",  # FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
     "S323",  # Python allows using an insecure context via the `_create_unverified_context` that reverts to the previous behavior that does not validate certificates or perform hostname checks.
 #    "S324",  # Probable use of insecure hash functions in `hashlib`: `{string}`

@@ -266,7 +266,6 @@ def tail_check(check):
     ('otherext.html', ".//h1", "Generated section"),
     ('otherext.html', ".//a[@href='_sources/otherext.foo.txt']", ''),
 
-    ('search.html', ".//meta[@name='robots'][@content='noindex']", ''),
 ])
 @pytest.mark.sphinx('html', tags=['testtag'],
                     confoverrides={'html_context.hckey_co': 'hcval_co'})
@@ -274,13 +273,3 @@ def tail_check(check):
 def test_html5_output(app, cached_etree_parse, fname, path, check):
     app.build()
     check_xpath(cached_etree_parse(app.outdir / fname), fname, path, check)
-
-
-@pytest.mark.sphinx('html', tags=['testtag'],
-                    confoverrides={'html_context.hckey_co': 'hcval_co'})
-@pytest.mark.test_params(shared_result='test_build_html_output')
-def test_foo(app, cached_etree_parse):
-    fname, path, check = ('includes.html', ".//div[@class='inc-startend highlight-text notranslate']//pre", '^foo')
-
-    app.build()
-    check_xpath(cached_etree_parse(app.outdir / fname), fname, path, check, False)

@@ -4,15 +4,15 @@ import os
 import re
 from typing import TYPE_CHECKING
 
-import lxml.etree
-from lxml.etree import _Element as ElementLXML
-from lxml.etree import _ElementTree as ElementTreeLXML
+import xml.etree
+from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import ElementTree, tostring as etree_tostring
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 
-def _get_text(node: ElementLXML) -> str:
+def _get_text(node: Element) -> str:
     if node.text is not None:
         # the node has only one text
         return node.text
@@ -22,16 +22,16 @@ def _get_text(node: ElementLXML) -> str:
 
 
 def check_xpath(
-    etree: ElementTreeLXML,
+    etree: ElementTree,
     fname: str | os.PathLike[str],
     xpath: str,
-    check: str | re.Pattern[str] | Callable[[Sequence[ElementLXML]], None] | None,
+    check: str | re.Pattern[str] | Callable[[Sequence[Element]], None] | None,
     be_found: bool = True,
 ) -> None:
-    assert isinstance(etree, ElementTreeLXML)
+    assert isinstance(etree, ElementTree)
 
     nodes = list(etree.findall(xpath))
-    assert all(isinstance(node, ElementLXML) for node in nodes)
+    assert all(isinstance(node, Element) for node in nodes)
 
     if check is None:
         assert nodes == [], ('found any nodes matching xpath '
@@ -54,7 +54,7 @@ def check_xpath(
             if all(not rex.search(_get_text(node)) for node in nodes):
                 return
 
-        context = list(map(lxml.etree.tostring, nodes))
+        context = list(map(etree_tostring, nodes))
         msg = (f'{check!r} not found in any node matching '
                f'{xpath!r} in file {os.fsdecode(fname)}: {context}')
         raise AssertionError(msg)
